@@ -36,7 +36,7 @@ export const GSAP_PHASES = [
   },
   {
     key: "reset",       time: 2.5, duration: 0.6, ease: "back.out(2)",
-    label: "ATP HYDROLYSIS",  color: "#ffffff",
+    label: "E2-P STATE",      color: "#ffffff",
     scale: { x: 1.0,  y: 1.0,  z: 1.0  },
   },
   {

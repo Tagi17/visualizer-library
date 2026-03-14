@@ -3,7 +3,7 @@
  * Position + scale driven by useFrame (pure math, no GSAP).
  * "Fade" is simulated via scale: 0 → ION_RADIUS → 0 across the travel window.
  */
-import React, { useRef, useMemo } from "react";
+import React, { useRef, useMemo, useEffect } from "react";
 import { useFrame }  from "@react-three/fiber";
 import * as THREE    from "three";
 import { BIO_CONSTANTS } from "../../../constants/library";
@@ -81,6 +81,13 @@ const IonInstances = ({ meshRef, count, color, ionData, startY, endY }) => {
 const PumpIons = () => {
   const naRef = useRef();
   const kRef  = useRef();
+
+  useEffect(() => () => {
+    [naRef, kRef].forEach(r => {
+      r.current?.geometry?.dispose();
+      r.current?.material?.dispose();
+    });
+  }, []);
 
   return (
     <>

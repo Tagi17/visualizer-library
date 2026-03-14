@@ -23,7 +23,7 @@ export const BIO_CONSTANTS = {
     RADIUS_A: 1.38,
   },
   MEMBRANE: {
-    COLOR:        "rgba(128, 128, 128, 0.5)",
+    COLOR:        "#808080",
     THICKNESS_NM: 8,
     RESTING_MV:   -70,
   },

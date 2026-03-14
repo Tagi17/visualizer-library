@@ -17,11 +17,11 @@ const AuraScene = ({ focus }) => (
     <WireframeHuman focus={focus} />
     <BioFieldRings  focus={focus} />
     <Text position={[0, 7.0, 0]} fontSize={0.34} color={SODIUM.COLOR}
-          font="monospace" anchorX="center">
+          anchorX="center">
       {SYMBOLS.PREFIX} OSCILLATION AURA
     </Text>
-    <Text position={[0, 6.35, 0]} fontSize={0.15} color="rgba(255,255,255,0.18)"
-          font="monospace" anchorX="center">
+    <Text position={[0, 6.35, 0]} fontSize={0.15} color="#ffffff" fillOpacity={0.18}
+          anchorX="center">
       ∇×B = μ₀(J + ε₀ ∂E/∂t)
     </Text>
   </group>
@@ -43,7 +43,7 @@ const OscillationAuraPage = () => {
 
       <SceneWrapper
         placeholderVariant="aura"
-        camera={{ position: [0, 2, 18], fov: 44 }}
+        camera={{ position: [0, 1, 16], fov: 55 }}
         aspectRatio="4/3"
         orbitProps={{ minDistance: 8, maxDistance: 35 }}
         onLive={() => setIsLive(true)}
@@ -68,9 +68,11 @@ const OscillationAuraPage = () => {
               {(focus * 100).toFixed(0)}%
             </span>
             <div className="flex items-center gap-1.5 pl-3 border-l border-white/[0.07] flex-shrink-0">
-              <span className="pulse-dot w-1.5 h-1.5 rounded-full bg-sodium" />
-              <span className="text-[9px] tracking-[0.15em] font-bold uppercase text-sodium">
-                {focus > 0.6 ? "COHERENT" : focus > 0.3 ? "FORMING" : "CHAOTIC"}
+              <span className="pulse-dot w-1.5 h-1.5 rounded-full"
+                    style={{ backgroundColor: focus > 0.6 ? SODIUM.COLOR : focus > 0.3 ? "#FFAA00" : POTASSIUM.COLOR }} />
+              <span className="text-[9px] tracking-[0.15em] font-bold uppercase"
+                    style={{ color: focus > 0.6 ? SODIUM.COLOR : focus > 0.3 ? "#FFAA00" : POTASSIUM.COLOR }}>
+                {focus > 0.6 ? "◈ COHERENT" : focus > 0.3 ? "◈ FORMING" : "◈ CHAOS"}
               </span>
             </div>
           </div>

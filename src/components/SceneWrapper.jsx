@@ -13,10 +13,25 @@
  *  • onLive prop notifies parent pages
  */
 import React, { useState, Suspense, useRef, useEffect, useCallback } from "react";
-import { Canvas }        from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { Preload, OrbitControls } from "@react-three/drei";
 import ErrorBoundary     from "./ErrorBoundary";
 import StaticPlaceholder from "./StaticPlaceholder";
+
+/* Traverses the scene on unmount and disposes every geometry + material. */
+const SceneDisposer = () => {
+  const { gl, scene } = useThree();
+  useEffect(() => () => {
+    scene.traverse(o => {
+      o.geometry?.dispose();
+      Array.isArray(o.material)
+        ? o.material.forEach(m => m.dispose())
+        : o.material?.dispose();
+    });
+    gl.dispose();
+  }, []); // eslint-disable-line
+  return null;
+};
 
 const SceneWrapper = ({
   children,
@@ -104,31 +119,34 @@ const SceneWrapper = ({
 
       {/* ── Canvas (mounted only after init) ─────────────────── */}
       {isInitialized && (
+        <div className="absolute inset-0" style={{ zIndex: 1 }}>
         <ErrorBoundary>
           <Suspense fallback={null}>
             <Canvas
-              shadows
-              gl={{ antialias: true, stencil: false, powerPreference: "high-performance" }}
+              gl={{ antialias: false, stencil: false, preserveDrawingBuffer: false, powerPreference: "high-performance" }}
               camera={camera}
-              dpr={[1, 2]}
+              dpr={[1, 1.5]}
+              performance={{ min: 0.5 }}
               onCreated={handleCreated}
               style={{ background: "#000000" }}
             >
               <color attach="background" args={["#000000"]} />
-              <ambientLight intensity={0.15} />
+              <ambientLight intensity={0.5} />
               <pointLight position={[ 8,  10,  8]} intensity={2.0} color="#FFD700" />
               <pointLight position={[-8,  -8, -8]} intensity={0.8} color="#00F2FF" />
-              <pointLight position={[ 0,   0, 10]} intensity={0.3} color="#ffffff" />
+              <pointLight position={[ 0,   0, 10]} intensity={1.5} color="#ffffff" />
               {children}
               <OrbitControls
                 enablePan={false} enableDamping dampingFactor={0.04}
                 minDistance={3} maxDistance={28}
                 {...orbitProps}
               />
+              <SceneDisposer />
               <Preload all />
             </Canvas>
           </Suspense>
         </ErrorBoundary>
+        </div>
       )}
 
       {isLive && (

@@ -55,7 +55,7 @@ const PumpMechanismPage = () => {
 
       <SceneWrapper
         placeholderVariant="pump"
-        camera={{ position: [0, 0.5, 10], fov: 42 }}
+        camera={{ position: [0, 0.5, 10], fov: 60 }}
         aspectRatio="4/3"
         onLive={() => setIsLive(true)}
       >

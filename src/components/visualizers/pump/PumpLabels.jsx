@@ -12,7 +12,6 @@ const Label = ({ position, text, color, size = 0.28, opacity = 1 }) => (
     position={position}
     fontSize={size}
     color={color}
-    font="monospace"
     anchorX="center"
     anchorY="middle"
     fillOpacity={opacity}
@@ -27,13 +26,13 @@ const PumpLabels = () => (
     <Label
       position={[5.2,  2.6, 0]}
       text="EXTRACELLULAR"
-      color="rgba(255,255,255,0.15)"
+      color="#ffffff" opacity={0.15}
       size={0.24}
     />
     <Label
       position={[5.2, -2.6, 0]}
       text="INTRACELLULAR"
-      color="rgba(255,255,255,0.15)"
+      color="#ffffff" opacity={0.15}
       size={0.24}
     />
 
@@ -47,7 +46,7 @@ const PumpLabels = () => (
     <Label
       position={[0, 3.45, 0]}
       text="Active Transport  ·  3 Na⁺ : 2 K⁺ : 1 ATP"
-      color="rgba(255,255,255,0.22)"
+      color="#ffffff" opacity={0.22}
       size={0.17}
     />
 

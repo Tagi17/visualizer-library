@@ -11,9 +11,9 @@ import { BIO_CONSTANTS } from "../constants/library";
 const { SODIUM, POTASSIUM } = BIO_CONSTANTS;
 
 const getStatus = (f) =>
-  f < 0.5  ? { label: "CRITICAL LEAKAGE",   color: POTASSIUM.COLOR } :
-  f < 0.7  ? { label: "THRESHOLD APPROACH", color: "#FFAA00"       } :
-             { label: "COHERENT SIGNAL",     color: SODIUM.COLOR    };
+  f < 0.4  ? { label: "◈ ION LEAKAGE",        color: POTASSIUM.COLOR } :
+  f < 0.65 ? { label: "◈ THRESHOLD APPROACH", color: "#FFAA00"       } :
+             { label: "◈ SIGNAL STABILIZED",   color: SODIUM.COLOR    };
 
 const Stat = ({ label, value, color }) => (
   <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
@@ -32,7 +32,7 @@ const NeuronZapPage = () => {
 
       <SceneWrapper
         placeholderVariant="neuron"
-        camera={{ position: [2, 3, 12], fov: 44 }}
+        camera={{ position: [0, 0, 10], fov: 60 }}
         aspectRatio="4/3"
         orbitProps={{ minDistance: 5, maxDistance: 22 }}
         onLive={() => setIsLive(true)}
@@ -69,11 +69,11 @@ const NeuronZapPage = () => {
           {/* Row 2 — stats */}
           <div className="px-4 pb-3 pt-2 mt-0.5 border-t border-white/[0.04]
                           flex items-center gap-5 flex-wrap">
-            <Stat label="K⁺ Leak"     value={`${((1 - focus) * 100).toFixed(0)}%`}     color={POTASSIUM.COLOR} />
-            <Stat label="Na⁺ Speed"   value={`${(focus * 2.8).toFixed(1)} m/s`}          color={SODIUM.COLOR}    />
-            <Stat label="ACh Shields" value={focus > 0.7 ? "ACTIVE" : "INACTIVE"}         color={focus > 0.7 ? "#00FF88" : "#444"} />
-            <Stat label="Signal Str." value={`${(focus * focus * 100).toFixed(0)}%`}      color="rgba(255,255,255,0.6)" />
-            <Stat label="Threshold"   value={focus >= 0.7 ? "CROSSED" : "BELOW"}          color={focus >= 0.7 ? SODIUM.COLOR : "#555"} />
+            <Stat label="K⁺ Leak"      value={`${((1 - focus) * 100).toFixed(0)}%`}               color={POTASSIUM.COLOR} />
+            <Stat label="Na⁺ Speed"    value={`${(focus * 2.8).toFixed(1)} m/s`}                    color={SODIUM.COLOR}    />
+            <Stat label="Ch. Plugs"    value={focus >= 0.65 ? "SEALED" : "OPEN"}                    color={focus >= 0.65 ? POTASSIUM.COLOR : "#444"} />
+            <Stat label="Signal Str."  value={`${(focus * focus * 100).toFixed(0)}%`}               color="#888888" />
+            <Stat label="K⁺ Channels" value={focus >= 0.65 ? "BLOCKED" : `${(5 * (1-focus)).toFixed(1)} open`} color={focus >= 0.65 ? SODIUM.COLOR : POTASSIUM.COLOR} />
           </div>
         </div>
       )}
