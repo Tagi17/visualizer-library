@@ -32,7 +32,7 @@ const NeuronZapPage = () => {
 
       <SceneWrapper
         placeholderVariant="neuron"
-        camera={{ position: [0, 0, 10], fov: 60 }}
+        camera={{ position: [0, 2.5, 11], fov: 58 }}
         aspectRatio="4/3"
         orbitProps={{ minDistance: 5, maxDistance: 22 }}
         onLive={() => setIsLive(true)}

@@ -1,86 +1,23 @@
 /**
- * PumpIons — Instanced meshes for Na⁺ (3) and K⁺ (2) ions.
- * Position + scale driven by useFrame (pure math, no GSAP).
- * "Fade" is simulated via scale: 0 → ION_RADIUS → 0 across the travel window.
+ * PumpIons — 4-step instanced ion animation.
+ * Na⁺ (gold ×3): intracellular → centre → extracellular exit → hidden
+ * K⁺  (cyan ×2): hidden → extracellular entry → centre → intracellular exit
  */
 import React, { useRef, useMemo, useEffect } from "react";
-import { useFrame }  from "@react-three/fiber";
-import * as THREE    from "three";
+import { useFrame }      from "@react-three/fiber";
+import * as THREE        from "three";
 import { BIO_CONSTANTS } from "../../../constants/library";
-import { CYCLE, ION_RADIUS, NA_ION_DATA, K_ION_DATA } from "./pumpConstants";
+import { CYCLE, ION_RADIUS, NA_POSITIONS, K_POSITIONS } from "./pumpConstants";
 
 const { SODIUM, POTASSIUM } = BIO_CONSTANTS;
+const ss    = (t) => t * t * (3 - 2 * t);                      // smoothstep
+const lerp  = (a, b, t) => a + (b - a) * t;
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-/* ── helpers ──────────────────────────────────────────────────── */
-const smoothstep  = (t) => t * t * (3 - 2 * t);
-const lerp        = (a, b, t) => a + (b - a) * t;
-const fadeScale   = (t) =>                         // 0→1→0 with soft edges
-  t < 0.08 ? t / 0.08 : t > 0.88 ? (1 - t) / 0.12 : 1;
-
-/* ── IonInstances — generic instanced-mesh driver ─────────────── */
-const IonInstances = ({ meshRef, count, color, ionData, startY, endY }) => {
-  const dummy = useMemo(() => new THREE.Object3D(), []);
-
-  /* Initialise all instances hidden */
-  const initRef = useRef(false);
-
-  useFrame(({ clock }) => {
-    const mesh = meshRef.current;
-    if (!mesh) return;
-
-    /* One-time init: set all matrices to scale-0 */
-    if (!initRef.current) {
-      dummy.scale.setScalar(0);
-      dummy.updateMatrix();
-      for (let i = 0; i < count; i++) mesh.setMatrixAt(i, dummy.matrix);
-      mesh.instanceMatrix.needsUpdate = true;
-      initRef.current = true;
-    }
-
-    const ct = clock.elapsedTime % CYCLE;
-
-    ionData.forEach((ion, i) => {
-      const { x, z, startTime, duration } = ion;
-      const end = startTime + duration;
-
-      if (ct >= startTime && ct < end) {
-        const raw      = (ct - startTime) / duration;
-        const progress = smoothstep(raw);
-        dummy.position.set(
-          x + Math.sin(raw * Math.PI) * 0.18,
-          lerp(startY, endY, progress),
-          z + Math.cos(raw * Math.PI * 0.5) * 0.12,
-        );
-        dummy.scale.setScalar(ION_RADIUS * fadeScale(raw));
-      } else {
-        /* Park off-screen at resting side */
-        dummy.position.set(x, startY - Math.sign(endY - startY) * 0.5, z);
-        dummy.scale.setScalar(0);
-      }
-      dummy.updateMatrix();
-      mesh.setMatrixAt(i, dummy.matrix);
-    });
-
-    mesh.instanceMatrix.needsUpdate = true;
-  });
-
-  return (
-    <instancedMesh ref={meshRef} args={[null, null, count]}>
-      <sphereGeometry args={[1, 22, 22]} />
-      <meshStandardMaterial
-        color={color}
-        emissive={color}
-        emissiveIntensity={2.6}
-        toneMapped={false}
-      />
-    </instancedMesh>
-  );
-};
-
-/* ── PumpIons — composes Na⁺ + K⁺ instanced meshes ──────────── */
 const PumpIons = () => {
   const naRef = useRef();
   const kRef  = useRef();
+  const dummy = useMemo(() => new THREE.Object3D(), []);
 
   useEffect(() => () => {
     [naRef, kRef].forEach(r => {
@@ -89,26 +26,61 @@ const PumpIons = () => {
     });
   }, []);
 
+  useFrame(({ clock }) => {
+    if (!naRef.current || !kRef.current) return;
+    const ct = clock.elapsedTime % CYCLE;
+
+    /* ── Na⁺: enter 0→2.2, hold 2.2→3.4, exit 3.4→5.6, hidden 5.6→8 */
+    NA_POSITIONS.forEach((p, i) => {
+      if (ct < 2.2) {
+        dummy.position.set(p.x, lerp(-3.6, 0, ss(clamp(ct / 2.2, 0, 1))), p.z);
+        dummy.scale.setScalar(ION_RADIUS);
+      } else if (ct < 3.4) {
+        dummy.position.set(p.x, 0, p.z);
+        dummy.scale.setScalar(ION_RADIUS * 0.75);
+      } else if (ct < 5.6) {
+        const raw = clamp((ct - 3.4) / 2.2, 0, 1);
+        dummy.position.set(p.x, lerp(0, 3.8, ss(raw)), p.z);
+        dummy.scale.setScalar(ION_RADIUS * (1 - raw * raw));
+      } else {
+        dummy.scale.setScalar(0);
+      }
+      dummy.updateMatrix();
+      naRef.current.setMatrixAt(i, dummy.matrix);
+    });
+    naRef.current.instanceMatrix.needsUpdate = true;
+
+    /* ── K⁺: hidden 0→3.4, enter 3.4→5.6, release 5.6→8 */
+    K_POSITIONS.forEach((p, i) => {
+      if (ct < 3.4) {
+        dummy.scale.setScalar(0);
+      } else if (ct < 5.6) {
+        const raw = clamp((ct - 3.4) / 2.2, 0, 1);
+        dummy.position.set(p.x, lerp(3.6, 0, ss(raw)), p.z);
+        dummy.scale.setScalar(ION_RADIUS * raw);
+      } else {
+        const raw = clamp((ct - 5.6) / 2.4, 0, 1);
+        dummy.position.set(p.x, lerp(0, -3.8, ss(raw)), p.z);
+        dummy.scale.setScalar(ION_RADIUS * (1 - raw * raw));
+      }
+      dummy.updateMatrix();
+      kRef.current.setMatrixAt(i, dummy.matrix);
+    });
+    kRef.current.instanceMatrix.needsUpdate = true;
+  });
+
   return (
     <>
-      {/* 3 × Na⁺  intracellular → extracellular */}
-      <IonInstances
-        meshRef={naRef}
-        count={3}
-        color={SODIUM.COLOR}
-        ionData={NA_ION_DATA}
-        startY={-3.2}
-        endY={3.2}
-      />
-      {/* 2 × K⁺   extracellular → intracellular */}
-      <IonInstances
-        meshRef={kRef}
-        count={2}
-        color={POTASSIUM.COLOR}
-        ionData={K_ION_DATA}
-        startY={3.2}
-        endY={-3.2}
-      />
+      <instancedMesh ref={naRef} args={[null, null, 3]}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshStandardMaterial color={SODIUM.COLOR} emissive={SODIUM.COLOR}
+          emissiveIntensity={2.8} toneMapped={false} />
+      </instancedMesh>
+      <instancedMesh ref={kRef} args={[null, null, 2]}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshStandardMaterial color={POTASSIUM.COLOR} emissive={POTASSIUM.COLOR}
+          emissiveIntensity={2.8} toneMapped={false} />
+      </instancedMesh>
     </>
   );
 };

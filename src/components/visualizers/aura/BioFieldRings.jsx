@@ -1,67 +1,85 @@
 /**
- * BioFieldRings — chaos → coherent transition.
- * focus=0 : rings jitter with differential XY scale, multi-colored.
- * focus=1 : rings expand smoothly, uniformly gold, Schumann-keyed pulse.
+ * BioFieldRings — Math.sin vertex distortion on ring geometry.
+ * focus=0 : sin wave distorts each ring radially, rings are multi-colored.
+ * focus=1 : distortion=0, perfect circles, all gold, Schumann pulse.
  */
 import React, { useRef, useMemo, useEffect } from "react";
 import { useFrame }      from "@react-three/fiber";
 import * as THREE        from "three";
 import { BIO_CONSTANTS } from "../../../constants/library";
 
-const { SODIUM, POTASSIUM, PHYSICS } = BIO_CONSTANTS;
+const { SODIUM, PHYSICS } = BIO_CONSTANTS;
 const lerp  = (a, b, t) => a + (b - a) * t;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-/* One color per ring for the chaotic state */
 const CHAOS_COLORS = [
   "#FF3333", "#FF8800", "#CCFF00", "#00FF88",
   "#00CCFF", "#7744FF", "#FF44BB", "#FF6622",
   "#44FFCC", "#FF2266",
 ];
 
-/* ── Single expanding ring ───────────────────────────────── */
+/* ── Single distortable ring ─────────────────────────────── */
 const BioFieldRing = ({ index, total, focus, tiltX = 0, tiltZ = 0 }) => {
-  const ref       = useRef();
-  const phase     = (index / total) * Math.PI * 2;
-  const chaosFreq = 5 + index * 1.8;
+  const meshRef = useRef();
+  const phase   = (index / total) * Math.PI * 2;
+  const freq    = 4 + (index % 4) * 2;   // unique wave frequency per ring
 
-  /* Pre-allocate color objects — no GC churn per frame */
+  /* Imperative geometry so we can modify its vertices each frame */
+  const geo     = useMemo(() => new THREE.TorusGeometry(1, 0.022, 6, 64), []);
+  const origPos = useMemo(() => new Float32Array(geo.attributes.position.array), [geo]);
+
+  /* Pre-allocate color objects */
   const cFrom    = useMemo(() => new THREE.Color(CHAOS_COLORS[index % CHAOS_COLORS.length]), []);
   const cTo      = useMemo(() => new THREE.Color(SODIUM.COLOR), []);
   const cCurrent = useMemo(() => new THREE.Color(), []);
 
   useEffect(() => () => {
-    ref.current?.geometry?.dispose();
-    ref.current?.material?.dispose();
-  }, []);
+    geo.dispose();
+    meshRef.current?.material?.dispose();
+  }, [geo]);
 
   useFrame(({ clock }) => {
-    if (!ref.current) return;
+    if (!meshRef.current) return;
     const t     = clock.elapsedTime;
     const ringT = ((t * 0.52 + phase) % (Math.PI * 2)) / (Math.PI * 2);
     const s     = 1 + ringT * lerp(7, 14, focus);
 
-    /* Differential XY jitter → rings look jagged/elliptical at low focus */
-    const jagX = (1 - focus) * Math.sin(t * chaosFreq           + index * 2.1) * 0.22;
-    const jagY = (1 - focus) * Math.sin(t * chaosFreq * 0.73    + index * 1.4) * 0.18;
-    ref.current.scale.set(s + jagX, s + jagY, s);
+    /* ── Sin wave vertex distortion ── */
+    const amp = (1 - focus) * 0.36;
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const ox = origPos[i * 3];
+      const oy = origPos[i * 3 + 1];
+      const r  = Math.sqrt(ox * ox + oy * oy);
+      if (r > 0.01) {
+        const theta  = Math.atan2(oy, ox);
+        const wave   = amp > 0.005 ? Math.sin(theta * freq + t * 2.2 + index * 0.7) * amp : 0;
+        const scale  = (r + wave) / r;
+        pos.setX(i, ox * scale);
+        pos.setY(i, oy * scale);
+        pos.setZ(i, origPos[i * 3 + 2]);
+      }
+    }
+    pos.needsUpdate = true;
+
+    /* Scale ring outward uniformly */
+    meshRef.current.scale.setScalar(s);
 
     /* Color: chaos palette → gold */
     cCurrent.lerpColors(cFrom, cTo, focus);
-    ref.current.material.color.set(cCurrent);
-    ref.current.material.emissive.set(cCurrent);
+    meshRef.current.material.color.set(cCurrent);
+    meshRef.current.material.emissive.set(cCurrent);
 
-    /* Schumann pulse only kicks in once coherent */
     const pulse = focus > 0.5
       ? (0.5 + Math.sin(t * PHYSICS.SCHUMANN_HZ * 0.05) * 0.35)
       : 1.0;
-    ref.current.material.opacity           = (1 - ringT) * lerp(0.22, 0.65, focus);
-    ref.current.material.emissiveIntensity = lerp(0.9, 3.0, focus) * pulse;
+    meshRef.current.material.opacity           = (1 - ringT) * lerp(0.22, 0.65, focus);
+    meshRef.current.material.emissiveIntensity = lerp(0.9, 3.0, focus) * pulse;
   });
 
   return (
-    <mesh ref={ref} rotation={[tiltX, 0, tiltZ]}>
-      <torusGeometry args={[1, 0.02, 8, 60]} />
+    <mesh ref={meshRef} rotation={[tiltX, 0, tiltZ]}>
+      <primitive object={geo} attach="geometry" />
       <meshStandardMaterial
         color={CHAOS_COLORS[index % CHAOS_COLORS.length]}
         emissive={CHAOS_COLORS[index % CHAOS_COLORS.length]}
@@ -84,8 +102,7 @@ const MaxwellCurrents = ({ focus }) => {
   })), []);
 
   useEffect(() => () => {
-    ref.current?.geometry?.dispose();
-    ref.current?.material?.dispose();
+    ref.current?.geometry?.dispose(); ref.current?.material?.dispose();
   }, []);
 
   useFrame(({ clock }) => {
@@ -113,18 +130,12 @@ const MaxwellCurrents = ({ focus }) => {
   );
 };
 
-/* ── 10-plane ring configuration ─────────────────────────── */
 const RING_CONFIG = [
-  { tiltX: 0,              tiltZ: 0            },
-  { tiltX: Math.PI/4,      tiltZ: 0            },
-  { tiltX: Math.PI/2,      tiltZ: 0            },
-  { tiltX: 0,              tiltZ: Math.PI/3    },
-  { tiltX: Math.PI/5,      tiltZ: Math.PI/4    },
-  { tiltX: -Math.PI/4,     tiltZ: Math.PI/5    },
-  { tiltX: Math.PI/2,      tiltZ: Math.PI/2    },
-  { tiltX: Math.PI/6,      tiltZ: -Math.PI/3   },
-  { tiltX: -Math.PI/3,     tiltZ: Math.PI/6    },
-  { tiltX: Math.PI*0.3,    tiltZ: Math.PI*0.6  },
+  { tiltX: 0,           tiltZ: 0          }, { tiltX: Math.PI/4,  tiltZ: 0          },
+  { tiltX: Math.PI/2,   tiltZ: 0          }, { tiltX: 0,          tiltZ: Math.PI/3  },
+  { tiltX: Math.PI/5,   tiltZ: Math.PI/4  }, { tiltX: -Math.PI/4, tiltZ: Math.PI/5  },
+  { tiltX: Math.PI/2,   tiltZ: Math.PI/2  }, { tiltX: Math.PI/6,  tiltZ: -Math.PI/3 },
+  { tiltX: -Math.PI/3,  tiltZ: Math.PI/6  }, { tiltX: Math.PI*0.3,tiltZ: Math.PI*0.6},
 ];
 
 const BioFieldRings = ({ focus }) => (
