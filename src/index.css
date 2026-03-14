@@ -1,0 +1,190 @@
+@import "tailwindcss";
+
+/* ── Font Stacks ───────────────────────────────────────────────── */
+:root {
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  --font-sans: "Inter", system-ui, sans-serif;
+
+  font-family: var(--font-mono);
+  line-height: 1.6;
+  font-weight: 400;
+
+  color-scheme: dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #000000;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #000000;
+  overflow-x: hidden;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* ── Tailwind Theme Extensions ─────────────────────────────────── */
+@theme {
+  --color-sodium:    #FFD700;
+  --color-potassium: #00F2FF;
+  --color-membrane:  rgba(128, 128, 128, 0.5);
+}
+
+/* ── Blueprint Grid Background ─────────────────────────────────── */
+.blueprint-bg {
+  background-color: #000000;
+  background-image:
+    linear-gradient(rgba(255, 215, 0, 0.03)  1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 215, 0, 0.03) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 80px 80px, 80px 80px, 20px 20px, 20px 20px;
+}
+
+/* ── Glassmorphism Panel ───────────────────────────────────────── */
+.glass-panel {
+  background: rgba(8, 8, 8, 0.72);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 4px 32px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ── Glow Utilities ────────────────────────────────────────────── */
+.glow-sodium    { box-shadow: 0 0 12px rgba(255, 215,   0, 0.5), 0 0 40px rgba(255, 215,   0, 0.15); }
+.glow-potassium { box-shadow: 0 0 12px rgba(  0, 242, 255, 0.5), 0 0 40px rgba(  0, 242, 255, 0.15); }
+.glow-line      { box-shadow: 0 0 10px rgba(255, 215,   0, 0.3); }
+
+.text-sodium    { color: #FFD700; }
+.text-potassium { color: #00F2FF; }
+.bg-sodium      { background-color: #FFD700; }
+.bg-potassium   { background-color: #00F2FF; }
+
+/* ── Corner Bracket Decoration ─────────────────────────────────── */
+.corner-brackets {
+  position: relative;
+}
+.corner-brackets::before,
+.corner-brackets::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-color: rgba(255, 215, 0, 0.4);
+  border-style: solid;
+}
+.corner-brackets::before {
+  top: 0; left: 0;
+  border-width: 1px 0 0 1px;
+}
+.corner-brackets::after {
+  bottom: 0; right: 0;
+  border-width: 0 1px 1px 0;
+}
+
+/* ── Scan-Line Animation ────────────────────────────────────────── */
+@keyframes scanline {
+  0%   { transform: translateY(-100%); opacity: 0.6; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+.scanline {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(255, 215, 0, 0.08),
+    transparent
+  );
+  animation: scanline 8s linear infinite;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ── Pulse Dot ──────────────────────────────────────────────────── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1;   transform: scale(1);   }
+  50%       { opacity: 0.4; transform: scale(0.7); }
+}
+.pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+
+/* ── Data Blink ─────────────────────────────────────────────────── */
+@keyframes data-blink {
+  0%, 90%, 100% { opacity: 1; }
+  95%           { opacity: 0.2; }
+}
+.data-blink { animation: data-blink 3s ease-in-out infinite; }
+
+/* ── Range Input Styling ────────────────────────────────────────── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+  border-radius: 1px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 0;
+  background: #FFD700;
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.6);
+  transform: rotate(45deg);
+}
+input[type="range"].potassium-slider::-webkit-slider-thumb {
+  background: #00F2FF;
+  box-shadow: 0 0 8px rgba(0, 242, 255, 0.6);
+}
+
+/* ── Blueprint-scan animation (StaticPlaceholder) ──────────────── */
+@keyframes blueprint-scan {
+  0%   { top: -4px; opacity: 0; }
+  4%   { opacity: 1; }
+  96%  { opacity: 0.7; }
+  100% { top: calc(100% + 4px); opacity: 0; }
+}
+.blueprint-scan-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -4px;
+  height: 2px;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255, 215, 0, 0.35) 20%,
+    rgba(255, 215, 0, 0.85) 50%,
+    rgba(255, 215, 0, 0.35) 80%,
+    transparent 100%
+  );
+  box-shadow: 0 0 14px rgba(255, 215, 0, 0.5), 0 0 40px rgba(255, 215, 0, 0.15);
+  animation: blueprint-scan 3.2s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #000; }
+::-webkit-scrollbar-thumb { background: rgba(255, 215, 0, 0.2); border-radius: 2px; }
+
+/* ── Selection ──────────────────────────────────────────────────── */
+::selection { background: rgba(255, 215, 0, 0.25); color: #fff; }
