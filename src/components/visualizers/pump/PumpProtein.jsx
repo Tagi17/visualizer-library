@@ -51,10 +51,6 @@ const PumpProtein = ({ onStepChange }) => {
     return new THREE.ShapeGeometry(shape);
   }, []);
 
-  useEffect(() => {
-    /* Ensure morphTargetInfluences is initialised */
-    pumpRef.current?.updateMorphTargets?.();
-  }, []);
 
   useEffect(() => () => {
     pumpGeo.dispose();
@@ -123,7 +119,7 @@ const PumpProtein = ({ onStepChange }) => {
   return (
     <group>
       {/* Pump body — teal morph-target cylinder */}
-      <mesh ref={pumpRef}>
+      <mesh ref={pumpRef} morphTargetInfluences={[0]}>
         <primitive object={pumpGeo} attach="geometry" />
         <meshStandardMaterial color="#00BBAA" emissive="#004433"
           emissiveIntensity={0.6} transparent opacity={0.88}
