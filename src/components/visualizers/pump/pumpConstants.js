@@ -1,28 +1,27 @@
 /**
- * pumpConstants.js — 4-step Na⁺/K⁺ ATPase state machine.
- * CYCLE = 8 s.  STEPS define label/color for each phase.
- * NA_POSITIONS / K_POSITIONS give XZ offsets for each ion.
+ * pumpConstants.js — 5-phase Na⁺/K⁺ ATPase state machine.
+ * CYCLE = 12 s.
  */
 
-export const CYCLE      = 8;
+export const CYCLE      = 12.0;
 export const ION_RADIUS = 0.14;
 
-/* ── Step timing (seconds within 8s cycle) ───────────────── */
 export const STEPS = [
-  { key: "na-binding",  label: "Na⁺ BINDING",     color: "#FFD700", start: 0.0, end: 2.2 },
-  { key: "rotate",      label: "CONFORMATIONAL",   color: "#aaaaaa", start: 2.2, end: 3.4 },
-  { key: "exchange",    label: "ION EXCHANGE",      color: "#00F2FF", start: 3.4, end: 5.8 },
-  { key: "k-release",   label: "K⁺ RELEASE",       color: "#00F2FF", start: 5.8, end: 8.0 },
+  { key: "na-load",  label: "Na⁺ LOADING",    color: "#FFD700", start:  0.0, end:  2.5 },
+  { key: "atp",      label: "ATP TRIGGER",     color: "#44FF88", start:  2.5, end:  4.2 },
+  { key: "flip",     label: "CONFORMATIONAL",  color: "#aaaaaa", start:  4.2, end:  6.5 },
+  { key: "exchange", label: "ION EXCHANGE",    color: "#00FFFF", start:  6.5, end:  9.5 },
+  { key: "reset",    label: "K⁺ RELEASE",      color: "#888888", start:  9.5, end: 12.0 },
 ];
 
-/* ── Ion XZ positions (Y driven by state machine in PumpIons) ─ */
+/* Ion XZ offsets (Y is driven by state machine) */
 export const NA_POSITIONS = [
-  { x: -0.38, z:  0.22 },
-  { x:  0.04, z: -0.18 },
-  { x:  0.40, z:  0.06 },
+  { x: -0.32, z:  0.18 },
+  { x:  0.04, z: -0.22 },
+  { x:  0.32, z:  0.06 },
 ];
 
 export const K_POSITIONS = [
-  { x: -0.28, z: -0.14 },
-  { x:  0.28, z:  0.14 },
+  { x: -0.22, z: -0.12 },
+  { x:  0.22, z:  0.12 },
 ];
