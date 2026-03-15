@@ -33,14 +33,14 @@ const PumpIons = () => {
     /* ── Na⁺: enter 0→2.2, hold 2.2→3.4, exit 3.4→5.6, hidden 5.6→8 */
     NA_POSITIONS.forEach((p, i) => {
       if (ct < 2.2) {
-        dummy.position.set(p.x, lerp(-3.6, 0, ss(clamp(ct / 2.2, 0, 1))), p.z);
+        dummy.position.set(p.x, lerp(-4.2, 0, ss(clamp(ct / 2.2, 0, 1))), p.z);
         dummy.scale.setScalar(ION_RADIUS);
       } else if (ct < 3.4) {
         dummy.position.set(p.x, 0, p.z);
         dummy.scale.setScalar(ION_RADIUS * 0.75);
       } else if (ct < 5.6) {
         const raw = clamp((ct - 3.4) / 2.2, 0, 1);
-        dummy.position.set(p.x, lerp(0, 3.8, ss(raw)), p.z);
+        dummy.position.set(p.x, lerp(0, 4.2, ss(raw)), p.z);
         dummy.scale.setScalar(ION_RADIUS * (1 - raw * raw));
       } else {
         dummy.scale.setScalar(0);
@@ -56,11 +56,11 @@ const PumpIons = () => {
         dummy.scale.setScalar(0);
       } else if (ct < 5.6) {
         const raw = clamp((ct - 3.4) / 2.2, 0, 1);
-        dummy.position.set(p.x, lerp(3.6, 0, ss(raw)), p.z);
+        dummy.position.set(p.x, lerp(4.2, 0, ss(raw)), p.z);
         dummy.scale.setScalar(ION_RADIUS * raw);
       } else {
         const raw = clamp((ct - 5.6) / 2.4, 0, 1);
-        dummy.position.set(p.x, lerp(0, -3.8, ss(raw)), p.z);
+        dummy.position.set(p.x, lerp(0, -4.2, ss(raw)), p.z);
         dummy.scale.setScalar(ION_RADIUS * (1 - raw * raw));
       }
       dummy.updateMatrix();
