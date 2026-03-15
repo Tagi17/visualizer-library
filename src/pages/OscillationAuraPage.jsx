@@ -13,31 +13,23 @@ import { BIO_CONSTANTS } from "../constants/library";
 
 const { SODIUM, POTASSIUM, SYMBOLS } = BIO_CONSTANTS;
 
-/*
- * Figure group sits at FIGURE_Y so feet (local y=0) land at y=-6.5 in world space
- * — near the bottom of the viewport (camera [0,1,16] fov=55 ≈ ±8.3 half-height).
- * Heart/chest centre is at local y=7.05 → world y ≈ 0.55.
- */
-const FIGURE_Y = -6.5;
-const HEART_Y  =  7.05;   // ring emitter in figure-local space
-
 const AuraScene = ({ focus }) => (
   <group>
-    {/* ── Figure + ring emitter in one grounded group ── */}
-    <group position={[0, FIGURE_Y, 0]}>
+    {/* Figure: y=-1.5 puts feet near the bottom of the frame */}
+    <group position={[0, -1.5, 0]}>
       <WireframeHuman />
-
-      {/* Rings originate exactly from the chest/heart */}
-      <group position={[0, HEART_Y, 0]}>
-        <BioFieldRings focus={focus} />
-      </group>
     </group>
 
-    {/* ── Title floats above the figure's head ── */}
-    <Text position={[0, 4.8, 0]} fontSize={0.34} color={SODIUM.COLOR} anchorX="center">
+    {/* Heart emitter: static world position (0, 1.2, 0) */}
+    <group position={[0, 1.2, 0]}>
+      <BioFieldRings focus={focus} />
+    </group>
+
+    {/* Title above the figure's head (head top ≈ world y 8.1) */}
+    <Text position={[0, 9.0, 0]} fontSize={0.34} color={SODIUM.COLOR} anchorX="center">
       {SYMBOLS.PREFIX} OSCILLATION AURA
     </Text>
-    <Text position={[0, 4.2, 0]} fontSize={0.14} color="#ffffff" fillOpacity={0.18}
+    <Text position={[0, 8.4, 0]} fontSize={0.14} color="#ffffff" fillOpacity={0.18}
           anchorX="center">
       ∇×B = μ₀(J + ε₀ ∂E/∂t)
     </Text>

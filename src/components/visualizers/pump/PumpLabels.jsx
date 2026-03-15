@@ -1,6 +1,6 @@
 /**
  * PumpLabels — zone labels via <Html>, ion + title labels via <Text>.
- * Html uses the site's sans-serif font stack for visual consistency.
+ * Html labels have glow text-shadow to integrate with the 3D scene.
  */
 import React from "react";
 import { Html, Text } from "@react-three/drei";
@@ -8,7 +8,7 @@ import { BIO_CONSTANTS } from "../../../constants/library";
 
 const { SODIUM, SYMBOLS } = BIO_CONSTANTS;
 
-const LABEL_STYLE = {
+const ZONE_LABEL_STYLE = {
   fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif",
   letterSpacing: "0.15em",
   fontSize: "10px",
@@ -20,36 +20,40 @@ const LABEL_STYLE = {
 
 const PumpLabels = () => (
   <group>
-    {/* Html zone labels — screen-space, stay readable at any zoom */}
+    {/* Html zone labels — screen-space with glow integration */}
     <Html position={[-6.2, 3.2, 0]} transform={false}>
-      <div style={{ ...LABEL_STYLE, color: "rgba(160,196,255,0.80)" }}>
-        Outside (High Na⁺)
+      <div style={{
+        ...ZONE_LABEL_STYLE,
+        color: "rgba(160,196,255,0.92)",
+        textShadow: "0 0 10px rgba(160,196,255,0.85), 0 0 22px rgba(160,196,255,0.35)",
+      }}>
+        Outside (High Na+)
       </div>
     </Html>
     <Html position={[-6.2, -3.2, 0]} transform={false}>
-      <div style={{ ...LABEL_STYLE, color: "rgba(255,214,165,0.80)" }}>
-        Inside (High K⁺)
+      <div style={{
+        ...ZONE_LABEL_STYLE,
+        color: "rgba(255,214,165,0.92)",
+        textShadow: "0 0 10px rgba(255,214,165,0.85), 0 0 22px rgba(255,214,165,0.35)",
+      }}>
+        Inside (High K+)
       </div>
     </Html>
 
-    {/* Title */}
-    <Text position={[0, 5.6, 0]} fontSize={0.38} color={SODIUM.COLOR}
-          anchorX="center" fillOpacity={1}>
-      {`${SYMBOLS.PREFIX} Na\u207a/K\u207a-ATPase`}
-    </Text>
-    <Text position={[0, 5.0, 0]} fontSize={0.16} color="#ffffff"
-          anchorX="center" fillOpacity={0.30}>
-      Active Transport  ·  3 Na⁺ out : 2 K⁺ in : 1 ATP
+    {/* Title — clean spaced sans-serif, no superscript characters */}
+    <Text position={[0, 5.6, 0]} fontSize={0.35} color={SODIUM.COLOR}
+          anchorX="center" fillOpacity={1} letterSpacing={0.1}>
+      {`${SYMBOLS.PREFIX}  SODIUM-POTASSIUM PUMP  (3:2)`}
     </Text>
 
-    {/* Ion type labels — offset from pump, high contrast */}
+    {/* Ion type labels — plain Na+ / K+, no broken unicode superscripts */}
     <Text position={[-2.0, -3.6, 0]} fontSize={0.38} color="#FFD700"
           anchorX="center" fillOpacity={1}>
-      Na⁺
+      Na+
     </Text>
-    <Text position={[-2.0,  3.6, 0]} fontSize={0.38} color="#00FFFF"
+    <Text position={[-2.0, 3.6, 0]} fontSize={0.38} color="#00FFFF"
           anchorX="center" fillOpacity={1}>
-      K⁺
+      K+
     </Text>
   </group>
 );
