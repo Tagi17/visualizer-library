@@ -1,33 +1,28 @@
 /**
  * PumpMembrane — bilayer cross-section geometry.
- * Outer leaflet (y=+0.22), inner leaflet (y=-0.22), with wireframe + solid fill.
+ * Outer leaflet (y=+0.22), inner leaflet (y=-0.22).
+ * Emissive teal fill + wireframe grid so the membrane is clearly visible.
  */
 import React from "react";
 
-const leafletProps = {
-  rotation: [Math.PI / 2, 0, 0],
-};
-
-const Leaflet = ({ y, wireframe }) => (
-  <mesh {...leafletProps} position={[0, y, 0]}>
-    <planeGeometry args={[16, 16, wireframe ? 28 : 1, wireframe ? 28 : 1]} />
-    <meshStandardMaterial
-      color={wireframe ? "#303030" : "#111111"}
-      transparent
-      opacity={wireframe ? 0.2 : 0.55}
-      wireframe={wireframe}
-    />
-  </mesh>
+const Leaflet = ({ y }) => (
+  <group position={[0, y, 0]}>
+    <mesh rotation={[Math.PI / 2, 0, 0]}>
+      <planeGeometry args={[16, 16, 1, 1]} />
+      <meshStandardMaterial color="#1a4a3a" emissive="#004433"
+        emissiveIntensity={0.8} transparent opacity={0.35} />
+    </mesh>
+    <mesh rotation={[Math.PI / 2, 0, 0]}>
+      <planeGeometry args={[16, 16, 28, 28]} />
+      <meshStandardMaterial color="#00FFAA" transparent opacity={0.06} wireframe />
+    </mesh>
+  </group>
 );
 
 const PumpMembrane = () => (
   <group>
-    {/* Outer leaflet */}
-    <Leaflet y={ 0.22} wireframe />
-    <Leaflet y={ 0.22} wireframe={false} />
-    {/* Inner leaflet */}
-    <Leaflet y={-0.22} wireframe />
-    <Leaflet y={-0.22} wireframe={false} />
+    <Leaflet y={ 0.22} />
+    <Leaflet y={-0.22} />
   </group>
 );
 

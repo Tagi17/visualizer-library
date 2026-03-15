@@ -110,6 +110,28 @@ const SignalParticles = ({ focus }) => {
   );
 };
 
+/* ── Cyan sleeve: seals the membrane as focus → 1 ───────── */
+const Sleeve = ({ focus }) => {
+  const ref = useRef();
+  useEffect(() => () => {
+    ref.current?.geometry?.dispose(); ref.current?.material?.dispose();
+  }, []);
+  useFrame(() => {
+    if (!ref.current) return;
+    ref.current.material.opacity           = focus * 0.4;
+    ref.current.material.emissiveIntensity = lerp(0.5, 2.0, focus);
+  });
+  return (
+    <group rotation={[0, 0, Math.PI / 2]}>
+      <mesh ref={ref}>
+        <cylinderGeometry args={[RADIUS + 0.15, RADIUS + 0.15, LENGTH, 28, 1, false]} />
+        <meshStandardMaterial color="#00FFFF" emissive="#00FFFF"
+          emissiveIntensity={0.5} transparent opacity={0} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
+};
+
 /* ── Scene composition ───────────────────────────────────── */
 const NeuronScene = ({ focus }) => {
   const stabilized = focus >= 0.65;
@@ -119,6 +141,7 @@ const NeuronScene = ({ focus }) => {
   return (
     <group>
       <Dendrite />
+      <Sleeve focus={focus} />
       <LeakParticles  focus={focus} />
       <SignalParticles focus={focus} />
       <Text position={[0, 3.2, 0]} fontSize={0.3} color={labelColor} anchorX="center">

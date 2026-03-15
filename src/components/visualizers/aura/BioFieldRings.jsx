@@ -1,7 +1,9 @@
 /**
  * BioFieldRings — Math.sin vertex distortion on ring geometry.
- * focus=0 : sin wave distorts each ring radially, rings are multi-colored.
- * focus=1 : distortion=0, perfect circles, all gold, Schumann pulse.
+ * focus=0 : sin wave distorts each ring radially, rings are multi-colored,
+ *           tilted at random angles, opacity flickers.
+ * focus=1 : distortion=0, perfect circles, all gold, tilts lerp to flat,
+ *           synchronized breath (Schumann pulse).
  */
 import React, { useRef, useMemo, useEffect } from "react";
 import { useFrame }      from "@react-three/fiber";
@@ -42,7 +44,11 @@ const BioFieldRing = ({ index, total, focus, tiltX = 0, tiltZ = 0 }) => {
     if (!meshRef.current) return;
     const t     = clock.elapsedTime;
     const ringT = ((t * 0.52 + phase) % (Math.PI * 2)) / (Math.PI * 2);
-    const s     = 1 + ringT * lerp(7, 14, focus);
+
+    /* ── Synchronized breath at coherence ── */
+    const breathFactor = clamp((focus - 0.5) * 2, 0, 1);
+    const breathT      = lerp(ringT, (Math.sin(t * 0.7) + 1) / 2, breathFactor);
+    const s            = 1 + breathT * lerp(7, 14, focus);
 
     /* ── Sin wave vertex distortion ── */
     const amp = (1 - focus) * 0.36;
@@ -65,6 +71,10 @@ const BioFieldRing = ({ index, total, focus, tiltX = 0, tiltZ = 0 }) => {
     /* Scale ring outward uniformly */
     meshRef.current.scale.setScalar(s);
 
+    /* Dynamic tilt: chaos tilts lerp to flat at focus=1 */
+    meshRef.current.rotation.x = tiltX * (1 - focus);
+    meshRef.current.rotation.z = tiltZ * (1 - focus);
+
     /* Color: chaos palette → gold */
     cCurrent.lerpColors(cFrom, cTo, focus);
     meshRef.current.material.color.set(cCurrent);
@@ -73,12 +83,18 @@ const BioFieldRing = ({ index, total, focus, tiltX = 0, tiltZ = 0 }) => {
     const pulse = focus > 0.5
       ? (0.5 + Math.sin(t * PHYSICS.SCHUMANN_HZ * 0.05) * 0.35)
       : 1.0;
-    meshRef.current.material.opacity           = (1 - ringT) * lerp(0.22, 0.65, focus);
-    meshRef.current.material.emissiveIntensity = lerp(0.9, 3.0, focus) * pulse;
+
+    /* Opacity flicker at chaos */
+    const flicker = focus < 0.4
+      ? (0.4 + 0.6 * Math.abs(Math.sin(t * 9.0 + index * 1.7)))
+      : 1.0;
+
+    meshRef.current.material.opacity           = (1 - breathT) * lerp(0.22, 0.65, focus);
+    meshRef.current.material.emissiveIntensity = lerp(0.9, 3.0, focus) * pulse * flicker;
   });
 
   return (
-    <mesh ref={meshRef} rotation={[tiltX, 0, tiltZ]}>
+    <mesh ref={meshRef}>
       <primitive object={geo} attach="geometry" />
       <meshStandardMaterial
         color={CHAOS_COLORS[index % CHAOS_COLORS.length]}

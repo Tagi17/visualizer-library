@@ -14,8 +14,12 @@ const { SODIUM, POTASSIUM, PHYSICS, SYMBOLS } = BIO_CONSTANTS;
 
 const AuraScene = ({ focus }) => (
   <group>
-    <WireframeHuman focus={focus} />
-    <BioFieldRings  focus={focus} />
+    <group position={[0, -1.5, 0]}>
+      <WireframeHuman focus={focus} />
+    </group>
+    <group position={[0, 1.4, 0]}>
+      <BioFieldRings focus={focus} />
+    </group>
     <Text position={[0, 7.0, 0]} fontSize={0.34} color={SODIUM.COLOR}
           anchorX="center">
       {SYMBOLS.PREFIX} OSCILLATION AURA

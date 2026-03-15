@@ -128,9 +128,9 @@ const SceneWrapper = ({
               dpr={[1, 1.5]}
               performance={{ min: 0.5 }}
               onCreated={handleCreated}
-              style={{ background: "#050505" }}
+              style={{ background: "#0a0a0a" }}
             >
-              <color attach="background" args={["#050505"]} />
+              <color attach="background" args={["#0a0a0a"]} />
               <ambientLight intensity={0.5} />
               <pointLight position={[ 8,  10,  8]} intensity={2.0} color="#FFD700" />
               <pointLight position={[-8,  -8, -8]} intensity={0.8} color="#00F2FF" />

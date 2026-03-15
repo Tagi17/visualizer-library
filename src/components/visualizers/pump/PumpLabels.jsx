@@ -26,13 +26,13 @@ const PumpLabels = () => (
     <Label
       position={[5.2,  2.6, 0]}
       text="EXTRACELLULAR"
-      color="#ffffff" opacity={0.15}
+      color="#ffffff" opacity={0.4}
       size={0.24}
     />
     <Label
       position={[5.2, -2.6, 0]}
       text="INTRACELLULAR"
-      color="#ffffff" opacity={0.15}
+      color="#ffffff" opacity={0.4}
       size={0.24}
     />
 
@@ -51,8 +51,8 @@ const PumpLabels = () => (
     />
 
     {/* Ion type labels */}
-    <Label position={[-2.2, -2.0, 0]} text="Na⁺" color={SODIUM.COLOR}    size={0.22} opacity={0.6}/>
-    <Label position={[-2.2,  2.0, 0]} text="K⁺"  color={POTASSIUM.COLOR} size={0.22} opacity={0.6}/>
+    <Label position={[-2.2, -2.0, 0]} text="Na⁺" color={SODIUM.COLOR}    size={0.22} opacity={1.0}/>
+    <Label position={[-2.2,  2.0, 0]} text="K⁺"  color={POTASSIUM.COLOR} size={0.22} opacity={1.0}/>
   </group>
 );
 

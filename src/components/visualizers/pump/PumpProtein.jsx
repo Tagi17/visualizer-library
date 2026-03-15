@@ -1,9 +1,10 @@
 /**
  * PumpProtein — 4-step GSAP state machine.
- * Step 1 na-binding  : protein squishes wide (receiving Na⁺)
+ * Step 1 na-binding  : protein ring squishes wide (receiving Na⁺)
  * Step 2 rotate      : 180° conformational rotation
- * Step 3 exchange    : elongated open extracellular, top cone glows
- * Step 4 k-release   : rotates back, bottom cone glows, restores shape
+ * Step 3 exchange    : elongated, top indicator ring glows gold
+ * Step 4 k-release   : rotates back, bottom indicator ring glows cyan
+ * Hollow cylinder tube bisects the membrane. No cones.
  */
 import React, { useRef, useEffect } from "react";
 import { useFrame }   from "@react-three/fiber";
@@ -42,7 +43,7 @@ const PumpProtein = ({ onStepChange }) => {
     tl.to(r, { y: Math.PI, duration: 1.2, ease: "power2.inOut",
       onStart: () => cbRef.current?.("rotate") }, 2.2);
 
-    /* Step 3 — exchange: elongated, extracellular cone glows */
+    /* Step 3 — exchange: elongated, top ring glows */
     tl.to(s, { x: 0.78, y: 1.45, z: 0.78, duration: 0.8, ease: "back.out(1.5)",
       onStart: () => cbRef.current?.("exchange") }, 3.4);
     if (topRef.current) {
@@ -50,7 +51,7 @@ const PumpProtein = ({ onStepChange }) => {
       tl.to(topRef.current.material, { emissiveIntensity: 0.3, opacity: 0.2,  duration: 0.5  }, 5.4);
     }
 
-    /* Step 4 — K⁺ release: rotate back, intracellular cone glows */
+    /* Step 4 — K⁺ release: rotate back, bottom ring glows */
     tl.to(r, { y: Math.PI * 2, duration: 1.2, ease: "power2.inOut",
       onStart: () => cbRef.current?.("k-release") }, 5.8);
     tl.to(s, { x: 1.0, y: 1.0, z: 1.0, duration: 0.8, ease: "back.out(1.5)" }, 6.0);
@@ -71,30 +72,39 @@ const PumpProtein = ({ onStepChange }) => {
 
   return (
     <group ref={bodyRef}>
+      {/* Main protein ring */}
       <mesh ref={pumpRef}>
         <torusGeometry args={[1.4, 0.55, 20, 100]} />
-        <meshStandardMaterial color="#3a3a3a" emissive="#111111" emissiveIntensity={0.4}
+        <meshStandardMaterial color="#2a3a4a" emissive="#1a2a3a" emissiveIntensity={0.8}
           transparent opacity={0.92} roughness={0.4} metalness={0.65} />
       </mesh>
 
+      {/* Hollow channel tube bisecting the membrane */}
+      <mesh>
+        <cylinderGeometry args={[0.52, 0.52, 3.5, 20, 2, true]} />
+        <meshStandardMaterial color="#1e3a4a" emissive="#005588" emissiveIntensity={0.6}
+          transparent opacity={0.55} side={THREE.DoubleSide} />
+      </mesh>
+
+      {/* Gate ring — center, slowly rotating */}
       <mesh ref={channelRef}>
         <torusGeometry args={[0.55, 0.10, 14, 64]} />
-        <meshStandardMaterial color="#333333" emissive="#444444" emissiveIntensity={0.5}
-          transparent opacity={0.45} />
+        <meshStandardMaterial color="#224455" emissive="#0088aa" emissiveIntensity={0.7}
+          transparent opacity={0.55} />
       </mesh>
 
-      {/* Extracellular cone — Na⁺ exit indicator */}
-      <mesh ref={topRef} position={[0, 2.1, 0]} rotation={[Math.PI, 0, 0]}>
-        <coneGeometry args={[0.42, 1.1, 14, 1, true]} />
+      {/* Na⁺ exit indicator ring — extracellular top */}
+      <mesh ref={topRef} position={[0, 1.75, 0]}>
+        <torusGeometry args={[0.42, 0.06, 10, 48]} />
         <meshStandardMaterial color="#FFD700" emissive="#FFD700" emissiveIntensity={0.3}
-          transparent opacity={0.2} side={THREE.DoubleSide} />
+          transparent opacity={0.2} />
       </mesh>
 
-      {/* Intracellular cone — K⁺ entry indicator */}
-      <mesh ref={btmRef} position={[0, -2.1, 0]}>
-        <coneGeometry args={[0.42, 1.1, 14, 1, true]} />
+      {/* K⁺ entry indicator ring — intracellular bottom */}
+      <mesh ref={btmRef} position={[0, -1.75, 0]}>
+        <torusGeometry args={[0.42, 0.06, 10, 48]} />
         <meshStandardMaterial color="#00F2FF" emissive="#00F2FF" emissiveIntensity={0.3}
-          transparent opacity={0.2} side={THREE.DoubleSide} />
+          transparent opacity={0.2} />
       </mesh>
     </group>
   );
