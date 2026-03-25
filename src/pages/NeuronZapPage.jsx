@@ -1,34 +1,120 @@
 /**
- * ◈ /neuron-zap
- * placeholderVariant="neuron" — shows dendrite schematic.
- * Panel + slider only render after isLive=true.
+ * ◈ ACTION POTENTIAL SIMULATION
+ * Autonomous repeating animation — no slider required.
+ * Live dashboard panel updates via DOM refs (zero React re-renders at 60 fps).
  */
-import React, { useState } from "react";
-import SceneWrapper  from "../components/SceneWrapper";
-import NeuronScene   from "../components/visualizers/neuron/NeuronScene";
-import { BIO_CONSTANTS } from "../constants/library";
+import React, { useState, useRef, useCallback } from "react";
+import SceneWrapper from "../components/SceneWrapper";
+import NeuronScene  from "../components/visualizers/neuron/NeuronScene";
 
-const { SODIUM, POTASSIUM } = BIO_CONSTANTS;
+/* ── Color palette ──────────────────────────────────────────────── */
+const CYAN    = "#00FFFF";
+const GOLD    = "#FFD700";
+const VIOLET  = "#7722FF";
+const DIM     = "rgba(255,255,255,0.22)";
 
-const getStatus = (f) =>
-  f < 0.4  ? { label: "◈ ION LEAKAGE",        color: POTASSIUM.COLOR } :
-  f < 0.65 ? { label: "◈ THRESHOLD APPROACH", color: "#FFAA00"       } :
-             { label: "◈ SIGNAL STABILIZED",   color: SODIUM.COLOR    };
+const PHASE_META = {
+  rest   : { label: "◈ RESTING POTENTIAL",   color: DIM    },
+  travel : { label: "◈ DEPOLARISATION",       color: CYAN   },
+  bloom  : { label: "◈ SYNAPTIC RELEASE",     color: GOLD   },
+};
 
-const Stat = ({ label, value, color }) => (
-  <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
-    <span className="text-[8px] tracking-widest text-white/25 uppercase">{label}</span>
-    <span className="text-[10px] font-mono font-semibold leading-none" style={{ color }}>{value}</span>
+/* ── Panel sub-components ───────────────────────────────────────── */
+const Stat = ({ label, valueRef, color }) => (
+  <div style={{
+    display:       "flex",
+    flexDirection: "column",
+    alignItems:    "center",
+    gap:           "3px",
+    flexShrink:    0,
+    minWidth:      "72px",
+  }}>
+    <span style={{
+      fontSize:      "7px",
+      letterSpacing: "0.24em",
+      color:         "rgba(255,255,255,0.2)",
+      textTransform: "uppercase",
+      fontFamily:    "var(--font-mono)",
+      whiteSpace:    "nowrap",
+    }}>
+      {label}
+    </span>
+    <span
+      ref={valueRef}
+      style={{
+        fontSize:   "11px",
+        fontFamily: "var(--font-mono)",
+        fontWeight: 700,
+        lineHeight: 1,
+        color,
+        whiteSpace: "nowrap",
+      }}
+    >
+      —
+    </span>
   </div>
 );
 
+/* ─────────────────────────────────────────────────────────────── */
+
+const PANEL = {
+  background: "#0a0a0a",
+  borderTop:  "1px solid rgba(255,255,255,0.05)",
+  fontFamily: "var(--font-mono)",
+};
+const DIVIDER = { borderTop: "1px solid rgba(255,255,255,0.04)" };
+
 const NeuronZapPage = () => {
   const [isLive, setIsLive] = useState(false);
-  const [focus,  setFocus]  = useState(0.25);
-  const status = getStatus(focus);
+
+  /* DOM refs — updated imperatively from NeuronScene.onUpdate */
+  const vmRef        = useRef();
+  const phaseTextRef = useRef();
+  const phaseDotRef  = useRef();
+  const naRef        = useRef();
+  const kRef         = useRef();
+  const syncRef      = useRef();
+
+  /* Track ion event counters */
+  const lastPhaseRef = useRef("rest");
+  const ionCountsRef = useRef({ na: 0, k: 0 });
+
+  const handleUpdate = useCallback(({ voltage, phase }) => {
+    /* Voltage */
+    if (vmRef.current) {
+      const mv = voltage.toFixed(0);
+      vmRef.current.textContent  = `${mv} mV`;
+      vmRef.current.style.color  =
+        voltage >  10 ? CYAN   :
+        voltage < -75 ? VIOLET :
+                        "rgba(255,255,255,0.55)";
+    }
+
+    /* Phase label + dot */
+    const meta = PHASE_META[phase] ?? PHASE_META.rest;
+    if (phaseTextRef.current) {
+      phaseTextRef.current.textContent = meta.label;
+      phaseTextRef.current.style.color = meta.color;
+    }
+    if (phaseDotRef.current) {
+      phaseDotRef.current.style.backgroundColor = meta.color;
+      phaseDotRef.current.style.boxShadow       = `0 0 5px ${meta.color}`;
+    }
+
+    /* Ion counters — increment on each travel start */
+    if (phase === "travel" && lastPhaseRef.current !== "travel") {
+      ionCountsRef.current.na += 8;
+      ionCountsRef.current.k  += 8;
+    }
+    lastPhaseRef.current = phase;
+
+    if (naRef.current)   naRef.current.textContent   = `${ionCountsRef.current.na}`;
+    if (kRef.current)    kRef.current.textContent    = `${ionCountsRef.current.k}`;
+    if (syncRef.current) syncRef.current.textContent = phase === "travel" ? "ACTIVE" : "IDLE";
+  }, []);
 
   return (
-    <div className="w-full max-w-[800px] mx-auto">
+    <div className="w-full max-w-[800px] mx-auto" style={{ background: "#0a0a0a" }}>
 
       <SceneWrapper
         placeholderVariant="neuron"
@@ -37,44 +123,94 @@ const NeuronZapPage = () => {
         orbitProps={{ minDistance: 5, maxDistance: 22 }}
         onLive={() => setIsLive(true)}
       >
-        <NeuronScene focus={focus} />
+        <NeuronScene onUpdate={handleUpdate} />
       </SceneWrapper>
 
       {isLive && (
-        <div className="glass-panel border-t border-white/[0.05]">
+        <div style={PANEL}>
 
-          {/* Row 1 — slider + status */}
-          <div className="px-4 pt-3 pb-1 flex items-center gap-4">
-            <span className="text-[8px] tracking-[0.3em] text-white/28 uppercase flex-shrink-0">
-              Focus
+          {/* Header */}
+          <div style={{
+            padding:        "11px 16px",
+            borderBottom:   "1px solid rgba(255,255,255,0.06)",
+            display:        "flex",
+            alignItems:     "center",
+            justifyContent: "space-between",
+          }}>
+            <span style={{ fontSize: "11px", letterSpacing: "0.26em", color: CYAN, fontWeight: 600 }}>
+              ◈ ACTION POTENTIAL SIMULATION
             </span>
-            <input
-              type="range" min="0" max="1" step="0.01" value={focus}
-              onChange={e => setFocus(parseFloat(e.target.value))}
-              className="flex-1"
-            />
-            <span className="text-[10px] font-mono font-semibold text-sodium w-8 text-right flex-shrink-0">
-              {(focus * 100).toFixed(0)}%
-            </span>
-            <div className="flex items-center gap-1.5 pl-3 border-l border-white/[0.07] flex-shrink-0">
-              <span className="pulse-dot w-1.5 h-1.5 rounded-full"
-                    style={{ backgroundColor: status.color }} />
-              <span className="text-[9px] tracking-[0.15em] font-bold uppercase"
-                    style={{ color: status.color }}>
-                {status.label}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span
+                ref={phaseDotRef}
+                style={{
+                  width: "6px", height: "6px", borderRadius: "50%",
+                  background: DIM, display: "inline-block",
+                  transition: "background 0.3s, box-shadow 0.3s",
+                }}
+              />
+              <span
+                ref={phaseTextRef}
+                style={{
+                  fontSize: "9px", letterSpacing: "0.16em",
+                  fontWeight: 700, color: DIM,
+                  transition: "color 0.3s",
+                }}
+              >
+                ◈ INITIALISING
               </span>
             </div>
           </div>
 
-          {/* Row 2 — stats */}
-          <div className="px-4 pb-3 pt-2 mt-0.5 border-t border-white/[0.04]
-                          flex items-center gap-5 flex-wrap">
-            <Stat label="K⁺ Leak"      value={`${((1 - focus) * 100).toFixed(0)}%`}               color={POTASSIUM.COLOR} />
-            <Stat label="Na⁺ Speed"    value={`${(focus * 2.8).toFixed(1)} m/s`}                    color={SODIUM.COLOR}    />
-            <Stat label="Ch. Plugs"    value={focus >= 0.65 ? "SEALED" : "OPEN"}                    color={focus >= 0.65 ? POTASSIUM.COLOR : "#444"} />
-            <Stat label="Signal Str."  value={`${(focus * focus * 100).toFixed(0)}%`}               color="#888888" />
-            <Stat label="K⁺ Channels" value={focus >= 0.65 ? "BLOCKED" : `${(5 * (1-focus)).toFixed(1)} open`} color={focus >= 0.65 ? SODIUM.COLOR : POTASSIUM.COLOR} />
+          {/* Live data readouts */}
+          <div style={{
+            ...DIVIDER,
+            padding:        "10px 16px",
+            display:        "flex",
+            alignItems:     "center",
+            justifyContent: "space-between",
+            gap:            "8px",
+          }}>
+            <Stat label="Vm"        valueRef={vmRef}   color={CYAN} />
+            <Stat label="Na⁺ in"   valueRef={naRef}   color={GOLD} />
+            <Stat label="K⁺ out"   valueRef={kRef}    color="#1a90ff" />
+            <Stat label="Signal"    valueRef={syncRef}  color={CYAN} />
+            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px" }}>
+              <span style={{ fontSize: "7px", letterSpacing: "0.24em", color: "rgba(255,255,255,0.2)", textTransform: "uppercase", fontFamily: "var(--font-mono)" }}>
+                Axon
+              </span>
+              <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", fontWeight: 700, color: "rgba(255,255,255,0.4)" }}>
+                11 μm
+              </span>
+            </div>
+            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px" }}>
+              <span style={{ fontSize: "7px", letterSpacing: "0.24em", color: "rgba(255,255,255,0.2)", textTransform: "uppercase", fontFamily: "var(--font-mono)" }}>
+                Cycle
+              </span>
+              <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", fontWeight: 700, color: "rgba(255,255,255,0.4)" }}>
+                7.0 s
+              </span>
+            </div>
           </div>
+
+          {/* Legend */}
+          <div style={{
+            ...DIVIDER,
+            padding:        "9px 16px",
+            display:        "flex",
+            alignItems:     "center",
+            justifyContent: "center",
+            gap:            "14px",
+          }}>
+            <span style={{ fontSize: "8px", letterSpacing: "0.22em", color: DIM,    fontWeight: 600 }}>RESTING</span>
+            <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.16)" }}>|</span>
+            <span style={{ fontSize: "8px", letterSpacing: "0.22em", color: CYAN,   fontWeight: 600 }}>DEPOLARISATION</span>
+            <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.16)" }}>|</span>
+            <span style={{ fontSize: "8px", letterSpacing: "0.22em", color: VIOLET, fontWeight: 600 }}>REFRACTORY</span>
+            <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.16)" }}>|</span>
+            <span style={{ fontSize: "8px", letterSpacing: "0.22em", color: GOLD,   fontWeight: 600 }}>SYNAPTIC</span>
+          </div>
+
         </div>
       )}
     </div>
