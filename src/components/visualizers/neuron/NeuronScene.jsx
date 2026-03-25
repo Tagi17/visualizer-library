@@ -116,13 +116,16 @@ const WAKE_FRAG = /* glsl */`
         alpha = mix(0.94, 0.72, f);
 
       } else if (behind > 1.28 && behind <= 3.28) {
-        /* ── REFRACTORY: 2-unit Deep Violet #4B0082 ─────────────── */
-        /* Cubic ease-in fade: full violet at entry, decays rapidly  */
-        /* so the zone reads as a brief flash, not a slow gradient.  */
-        float zone = (behind - 1.28) / 2.0;            /* 0→1 through zone */
-        float f    = 1.0 - pow(1.0 - zone, 3.0);       /* cubic ease-in     */
-        col   = mix(vec3(0.294, 0.0, 0.510), vec3(0.102, 0.102, 0.102), f);
-        alpha = mix(0.92, 0.62, f);
+        /* ── REFRACTORY: 2-unit #4B0082 Violet → Charcoal ──────── */
+        /* zone=0 at depolarisation edge, zone=1 at charcoal return. */
+        /* Cubic ease-in: hits full violet immediately, rapid decay  */
+        /* so the eye reads "flash of purple → dark" not a gradient. */
+        float zone = (behind - 1.28) / 2.0;
+        float f    = 1.0 - pow(1.0 - zone, 3.0);
+        /* HDR violet: multiply past 1.0 so it punches through glass */
+        vec3 violet = vec3(0.294, 0.0, 0.510) * 1.6;
+        col   = mix(violet, vec3(0.102, 0.102, 0.102), f);
+        alpha = mix(0.95, 0.62, f);
 
       }
       /* behind > 3.28 → resting charcoal (default above) */
@@ -328,8 +331,8 @@ const IonBurstSystem = ({ burstTriggerRef }) => {
           r * Math.cos(p.angle),
           r * Math.sin(p.angle),
         );
-        /* Scale eases out (large at spawn, shrinks to 0) */
-        dummy.scale.setScalar((1 - pct * pct) * 0.10);
+        /* Scale: quadratic ease-out so ions shrink visibly before vanishing */
+        dummy.scale.setScalar((1 - pct * pct) * 0.14);
         dummy.updateMatrix();
         meshRef.current.setMatrixAt(i, dummy.matrix);
       });
@@ -399,11 +402,13 @@ const SynapticBloom = ({ bloomTriggerRef }) => {
         p.vy    * BLOOM_LIFE * ease,
         p.vz    * BLOOM_LIFE * ease,
       );
-      /* Expand fast (0→20% of life), then fade slowly (20%→100%) */
-      const GROW = 0.20;
-      const size = pct < GROW
-        ? (pct / GROW) * 0.20
-        : ((1 - pct) / (1 - GROW)) * 0.20;
+      /* Pop to max in first 18%, then cubic ease-out fade to 0.
+         Cubic decay: size ∝ (1-t)³ — fast initial shrink, graceful tail
+         so particles never snap off — they dissolve into darkness.     */
+      const PEAK = 0.18;
+      const size = pct < PEAK
+        ? (pct / PEAK) * 0.22
+        : Math.pow(1 - (pct - PEAK) / (1 - PEAK), 3) * 0.22;
       dummy.scale.setScalar(size);
       dummy.updateMatrix();
       ref.current.setMatrixAt(i, dummy.matrix);
@@ -421,76 +426,36 @@ const SynapticBloom = ({ bloomTriggerRef }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════════
-   IonLegend — static Top-Left overlay, matches Oscilloscope style
-   ═══════════════════════════════════════════════════════════════════ */
-const LEGEND_ROWS = [
-  { label: "Na⁺ influx",      color: GOLD,                  dot: true  },
-  { label: "K⁺ efflux",       color: K_COL,                 dot: true  },
-];
-const PHASE_ROWS = [
-  { label: "RESTING",         color: "rgba(255,255,255,0.22)" },
-  { label: "DEPOLARISATION",  color: CYAN                    },
-  { label: "REFRACTORY",      color: "#8855FF"               },
-  { label: "SYNAPTIC",        color: GOLD                    },
-];
-
-const IonLegend = () => (
-  <Html position={[-5.0, 3.5, 0]} style={{ pointerEvents: "none" }}>
-    <div style={{
-      background:   "rgba(3,13,13,0.88)",
-      border:       "1px solid rgba(0,255,255,0.16)",
-      borderRadius: "3px",
-      padding:      "5px 7px",
-      fontFamily:   '"JetBrains Mono", "Fira Code", monospace',
-      userSelect:   "none",
-      minWidth:     "98px",
-    }}>
-      {/* Header */}
-      <div style={{
-        fontSize:      "6px",
-        color:         "rgba(0,255,255,0.42)",
-        letterSpacing: "0.22em",
-        textTransform: "uppercase",
-        marginBottom:  "4px",
-      }}>
-        Ion Legend
-      </div>
-
-      {/* Na+ / K+ dot rows */}
-      {LEGEND_ROWS.map(({ label, color }) => (
-        <div key={label} style={{ display: "flex", alignItems: "center", gap: "5px", marginBottom: "2px" }}>
-          <span style={{
-            width: "6px", height: "6px", borderRadius: "50%",
-            background: color, boxShadow: `0 0 4px ${color}`,
-            display: "inline-block", flexShrink: 0,
-          }} />
-          <span style={{ fontSize: "7px", color, letterSpacing: "0.10em" }}>{label}</span>
-        </div>
-      ))}
-
-      {/* Phase strip */}
-      <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", marginTop: "4px", paddingTop: "4px" }}>
-        {PHASE_ROWS.map(({ label, color }) => (
-          <div key={label} style={{
-            fontSize: "5.5px", color, letterSpacing: "0.16em", lineHeight: 1.75,
-          }}>
-            {label}
-          </div>
-        ))}
-      </div>
-    </div>
-  </Html>
-);
-
-/* ═══════════════════════════════════════════════════════════════════
-   Oscilloscope — perfectly synchronized with Zap position
+   SceneOverlay — fullscreen HTML canvas stretched to match the R3F
+   canvas exactly, then CSS position:absolute for each corner panel.
+   Using Html fullscreen avoids the world-space cropping / z-ordering
+   bugs that plagued individual position={[x,y,z]} overlays.
    ─────────────────────────────────────────────────────────────────
-   X-axis = travelProgress (0 → 1) — same variable as Zap.
-   Active dot is at dotX = travelProgress · SCOPE_W.
-   Ghost: full AP template (dim). Live: 0 → dotX (bright).
-   Zero React re-renders — all drawing is imperative in useFrame.
+   Top-Left  → Ion Legend  (static)
+   Top-Right → Oscilloscope (imperative canvas, zero re-renders)
    ═══════════════════════════════════════════════════════════════════ */
-const Oscilloscope = ({ travelProgressRef }) => {
+
+/* Shared panel style — identical for both corners */
+const OVERLAY_BOX = {
+  position:    "absolute",
+  background:  "rgba(3,13,13,0.90)",
+  border:      "1px solid rgba(0,255,255,0.18)",
+  borderRadius:"3px",
+  padding:     "6px 8px",
+  fontFamily:  '"JetBrains Mono", "Fira Code", monospace',
+  userSelect:  "none",
+  lineHeight:  1,
+};
+const OVERLAY_HEADER = {
+  fontSize:      "6px",
+  color:         "rgba(0,255,255,0.42)",
+  letterSpacing: "0.22em",
+  textTransform: "uppercase",
+  marginBottom:  "5px",
+  display:       "block",
+};
+
+const SceneOverlay = ({ travelProgressRef }) => {
   const canvasRef = useRef();
 
   useFrame(() => {
@@ -501,11 +466,11 @@ const Oscilloscope = ({ travelProgressRef }) => {
     const dotX = clamp(Math.floor(tp * SCOPE_W), 0, SCOPE_W - 1);
     const ctx  = cv.getContext("2d");
 
-    /* ── Background ────────────────────────────────────────────── */
+    /* Background */
     ctx.fillStyle = "#030d0d";
     ctx.fillRect(0, 0, SCOPE_W, SCOPE_H);
 
-    /* ── Grid — 0.5 px thin grey lines (per spec) ──────────────── */
+    /* Grid */
     ctx.strokeStyle = "rgba(180,180,180,0.12)";
     ctx.lineWidth   = 0.5;
     [-90, -70, 0, 40].forEach(mv => {
@@ -513,14 +478,14 @@ const Oscilloscope = ({ travelProgressRef }) => {
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(SCOPE_W, y); ctx.stroke();
     });
 
-    /* ── Ghost waveform (full AP curve, dim) ───────────────────── */
+    /* Ghost waveform */
     ctx.strokeStyle = "rgba(0,255,255,0.10)";
     ctx.lineWidth   = 1;
     ctx.beginPath();
     AP_TEMPLATE.forEach((y, x) => x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y));
     ctx.stroke();
 
-    /* ── Live portion (0 → dotX, bright cyan) ──────────────────── */
+    /* Live portion 0 → dotX */
     if (dotX > 0) {
       const grad = ctx.createLinearGradient(0, 0, dotX, 0);
       grad.addColorStop(0, "rgba(0,255,255,0.35)");
@@ -538,9 +503,9 @@ const Oscilloscope = ({ travelProgressRef }) => {
       ctx.shadowBlur = 0;
     }
 
-    /* ── Active dot — exactly aligned with Zap progress ─────────── */
+    /* Active dot — exactly aligned with Zap progress */
     const dotY = AP_TEMPLATE[dotX];
-    ctx.fillStyle  = "#00FFFF";
+    ctx.fillStyle   = "#00FFFF";
     ctx.shadowColor = "#00FFFF";
     ctx.shadowBlur  = 12;
     ctx.beginPath();
@@ -548,14 +513,14 @@ const Oscilloscope = ({ travelProgressRef }) => {
     ctx.fill();
     ctx.shadowBlur = 0;
 
-    /* ── mV labels — JetBrains Mono ────────────────────────────── */
+    /* mV labels */
     ctx.fillStyle = "rgba(0,255,255,0.40)";
     ctx.font      = '7px "JetBrains Mono", monospace';
     ctx.fillText("+40", 2, vToY(40)  - 2);
     ctx.fillText("-70", 2, vToY(-70) - 2);
     ctx.fillText("-90", 2, vToY(-90) + 8);
 
-    /* Current voltage readout */
+    /* Live voltage readout */
     const curV = getApVoltage(tp).toFixed(0);
     ctx.fillStyle = tp > 0.5 && tp < 0.85 ? "#00FFFF" : "rgba(0,255,255,0.38)";
     ctx.font      = '8px "JetBrains Mono", monospace';
@@ -563,25 +528,51 @@ const Oscilloscope = ({ travelProgressRef }) => {
   });
 
   return (
-    <Html position={[1.2, 3.5, 0]} style={{ pointerEvents: "none" }}>
-      <div style={{
-        background:   "#030d0d",
-        border:       "1px solid rgba(0,255,255,0.16)",
-        borderRadius: "3px",
-        padding:      "5px",
-        fontFamily:   '"JetBrains Mono", "Fira Code", monospace',
-        userSelect:   "none",
-      }}>
-        <div style={{
-          fontSize:      "6px",
-          color:         "rgba(0,255,255,0.42)",
-          letterSpacing: "0.22em",
-          marginBottom:  "3px",
-          textTransform: "uppercase",
-        }}>
-          Vm [mV] · action potential
+    /* fullscreen stretches this div to exactly match the R3F canvas */
+    <Html fullscreen style={{ pointerEvents: "none" }}>
+      <div style={{ position: "relative", width: "100%", height: "100%" }}>
+
+        {/* ── TOP-LEFT: Ion Legend ───────────────────────────────── */}
+        <div style={{ ...OVERLAY_BOX, top: "12px", left: "12px" }}>
+          <span style={OVERLAY_HEADER}>Ion Legend</span>
+
+          {/* Na⁺ / K⁺ dot rows */}
+          {[
+            { label: "Na⁺ influx", color: GOLD   },
+            { label: "K⁺ efflux",  color: K_COL  },
+          ].map(({ label, color }) => (
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: "5px", marginBottom: "2px" }}>
+              <span style={{
+                width: "6px", height: "6px", borderRadius: "50%",
+                background: color, boxShadow: `0 0 5px ${color}`,
+                display: "inline-block", flexShrink: 0,
+              }} />
+              <span style={{ fontSize: "7px", color, letterSpacing: "0.10em" }}>{label}</span>
+            </div>
+          ))}
+
+          {/* Phase colour key */}
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", marginTop: "5px", paddingTop: "5px" }}>
+            {[
+              { label: "RESTING",        color: "rgba(255,255,255,0.24)" },
+              { label: "DEPOLARISATION", color: CYAN                     },
+              { label: "REFRACTORY",     color: "#9966FF"                },
+              { label: "SYNAPTIC",       color: GOLD                     },
+            ].map(({ label, color }) => (
+              <div key={label} style={{ fontSize: "5.5px", color, letterSpacing: "0.16em", lineHeight: 1.8 }}>
+                {label}
+              </div>
+            ))}
+          </div>
         </div>
-        <canvas ref={canvasRef} width={SCOPE_W} height={SCOPE_H} />
+
+        {/* ── TOP-RIGHT: Oscilloscope ────────────────────────────── */}
+        <div style={{ ...OVERLAY_BOX, top: "12px", right: "12px" }}>
+          <span style={OVERLAY_HEADER}>Vm [mV] · action potential</span>
+          <canvas ref={canvasRef} width={SCOPE_W} height={SCOPE_H}
+            style={{ display: "block" }} />
+        </div>
+
       </div>
     </Html>
   );
@@ -668,8 +659,7 @@ const NeuronScene = ({ onUpdate }) => {
       <ZapSphere      zapXRef={zapXRef}           isActiveRef={isActiveRef} />
       <IonBurstSystem burstTriggerRef={burstTriggerRef} />
       <SynapticBloom  bloomTriggerRef={bloomTriggerRef} />
-      <IonLegend />
-      <Oscilloscope   travelProgressRef={travelProgressRef} />
+      <SceneOverlay   travelProgressRef={travelProgressRef} />
     </group>
   );
 };
