@@ -63,11 +63,14 @@ const lerp  = (a, b, t) => a + (b - a) * t;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 /* ── Analytic AP voltage at electrode (x=0, progress=0.5) ──────── */
-/* travelProgress: 0 = Zap at start, 1 = Zap at end               */
+/* Peak (+40 mV) is placed exactly at tp=0.5 (Zap at axon midpoint) */
+/* so the oscilloscope dot spikes to +40 the instant the Zap crosses x=0. */
+const UPSTROKE_TP = 0.065 / TRAVEL_DUR;          // ≈ 0.0171 tp-units
+const AP_FIRE_TP  = 0.5 - UPSTROKE_TP;           // ≈ 0.4829 — AP fires just before midpoint
+
 const getApVoltage = (tp) => {
-  const rel = tp - 0.5;          // negative until Zap reaches electrode
-  if (rel < 0) return -70;
-  const t = rel * TRAVEL_DUR;   // seconds since Zap crossed x=0
+  if (tp < AP_FIRE_TP) return -70;
+  const t = (tp - AP_FIRE_TP) * TRAVEL_DUR;      // seconds since AP fired
   if      (t < 0.065) return lerp(-70,  40, t / 0.065);
   else if (t < 0.200) return lerp( 40, -90, (t - 0.065) / 0.135);
   else if (t < 1.100) return lerp(-90, -70, (t - 0.200) / 0.900);
@@ -322,7 +325,7 @@ const IonBurstSystem = ({ burstTriggerRef }) => {
           r * Math.sin(p.angle),
         );
         /* Scale eases out (large at spawn, shrinks to 0) */
-        dummy.scale.setScalar((1 - pct * pct) * 0.076);
+        dummy.scale.setScalar((1 - pct * pct) * 0.10);
         dummy.updateMatrix();
         meshRef.current.setMatrixAt(i, dummy.matrix);
       });
@@ -350,7 +353,7 @@ const IonBurstSystem = ({ burstTriggerRef }) => {
 /* ═══════════════════════════════════════════════════════════════════
    SynapticBloom — 32 cyan particles, 1.5 s, full 360° burst
    ═══════════════════════════════════════════════════════════════════ */
-const BLOOM_COUNT = 32;
+const BLOOM_COUNT = 35;
 const BLOOM_LIFE  = 1.50;
 
 const SynapticBloom = ({ bloomTriggerRef }) => {
@@ -495,7 +498,7 @@ const Oscilloscope = ({ travelProgressRef }) => {
         border:       "1px solid rgba(0,255,255,0.16)",
         borderRadius: "3px",
         padding:      "5px",
-        fontFamily:   '"JetBrains Mono", monospace',
+        fontFamily:   '"JetBrains Mono", "Fira Code", monospace',
         userSelect:   "none",
       }}>
         <div style={{
@@ -562,7 +565,12 @@ const NeuronScene = ({ onUpdate }) => {
       });
 
     } else {
-      zapX = ZAP_END; tp = 1; phase = "bloom";
+      /* bloom — Zap frozen at terminus; keep isActive so wake/refractory
+         stays visible until the next cycle resets to rest             */
+      zapX     = ZAP_END;
+      tp       = 1;
+      phase    = "bloom";
+      isActive = true;   // refractory violet persists, ZapSphere stays at terminus
       if (!bloomFiredRef.current) {
         bloomFiredRef.current = true;
         bloomTriggerRef.current?.();

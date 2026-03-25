@@ -10,7 +10,7 @@ import NeuronScene  from "../components/visualizers/neuron/NeuronScene";
 /* ── Color palette ──────────────────────────────────────────────── */
 const CYAN    = "#00FFFF";
 const GOLD    = "#FFD700";
-const VIOLET  = "#7722FF";
+const VIOLET  = "#4B0082";   // matches wake shader refractory zone exactly
 const DIM     = "rgba(255,255,255,0.22)";
 
 const PHASE_META = {
@@ -110,7 +110,8 @@ const NeuronZapPage = () => {
 
     if (naRef.current)   naRef.current.textContent   = `${ionCountsRef.current.na}`;
     if (kRef.current)    kRef.current.textContent    = `${ionCountsRef.current.k}`;
-    if (syncRef.current) syncRef.current.textContent = phase === "travel" ? "ACTIVE" : "IDLE";
+    if (syncRef.current) syncRef.current.textContent =
+      phase === "travel" ? "ACTIVE" : phase === "bloom" ? "RELEASE" : "IDLE";
   }, []);
 
   return (
