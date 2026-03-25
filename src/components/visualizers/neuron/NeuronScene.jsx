@@ -554,7 +554,7 @@ const SceneOverlay = ({ travelProgressRef }) => {
                 display: "inline-block", flexShrink: 0, marginTop: "3px",
               }} />
               <div>
-                <div style={{ fontSize: "14px", fontWeight: 700, color, lineHeight: 1.2 }}>
+                <div style={{ fontSize: "16px", fontWeight: 700, color, lineHeight: 1.2 }}>
                   {label}
                 </div>
                 <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.35)", marginTop: "2px" }}>
