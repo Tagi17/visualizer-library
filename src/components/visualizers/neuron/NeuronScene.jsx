@@ -95,40 +95,40 @@ const WAKE_FRAG = /* glsl */`
 
   void main() {
     float x      = vWorldPos.x;
-    float behind = uZapX - x;    /* +ve = Zap has already passed */
+    float behind = uZapX - x;   /* +ve = Zap has already passed this point */
 
-    /* Resting state — deep charcoal #1a1a1a */
+    /* Default: deep charcoal #1a1a1a — resting membrane */
     vec3  col   = vec3(0.102, 0.102, 0.102);
-    float alpha = 0.62;
+    float alpha = 0.92;
 
     if (uIsActive > 0.5) {
 
-      if (abs(behind) < 0.28) {
-        /* ── LEAD: Neon Cyan tip ─────────────────────────────────── */
-        float g = 1.0 - abs(behind) / 0.28;
-        col   = mix(col, vec3(0.0, 1.0, 1.0), g);
-        alpha = mix(alpha, 0.98, g * 0.85);
+      if (behind < -0.45) {
+        /* ── AHEAD OF ZAP: undisturbed charcoal ─────────────────── */
+        col = vec3(0.102, 0.102, 0.102);
 
-      } else if (behind > 0.28 && behind <= 1.28) {
-        /* ── WAKE: 1-unit Cyan depolarisation segment ────────────── */
-        float f = (behind - 0.28) / 1.0;   /* 0 at tip, 1 at wake end */
-        col   = mix(vec3(0.0, 1.0, 1.0), vec3(0.0, 0.55, 0.6), f);
-        alpha = mix(0.94, 0.72, f);
+      } else if (abs(behind) <= 0.45) {
+        /* ── AT ZAP: Neon Cyan #00FFFF ──────────────────────────── */
+        /* HDR cyan so it glows even against the lattice overlay     */
+        float g = 1.0 - abs(behind) / 0.45;
+        col   = mix(vec3(0.0, 0.85, 0.9), vec3(0.0, 1.0, 1.0) * 2.2, g * g);
+        alpha = 1.0;
 
-      } else if (behind > 1.28 && behind <= 3.28) {
-        /* ── REFRACTORY: 2-unit #4B0082 Violet → Charcoal ──────── */
-        /* zone=0 at depolarisation edge, zone=1 at charcoal return. */
-        /* Cubic ease-in: hits full violet immediately, rapid decay  */
-        /* so the eye reads "flash of purple → dark" not a gradient. */
-        float zone = (behind - 1.28) / 2.0;
-        float f    = 1.0 - pow(1.0 - zone, 3.0);
-        /* HDR violet: multiply past 1.0 so it punches through glass */
-        vec3 violet = vec3(0.294, 0.0, 0.510) * 1.6;
-        col   = mix(violet, vec3(0.102, 0.102, 0.102), f);
-        alpha = mix(0.95, 0.62, f);
+      } else if (behind > 0.45 && behind <= 3.0) {
+        /* ── 0-3 units BEHIND: QUICK fade cyan → violet #4B0082 ── */
+        /* sqrt gives concave-up curve: hits violet fast, slows near end */
+        float t = (behind - 0.45) / 2.55;          /* 0→1 over the zone */
+        float f = sqrt(t);                           /* fast initial rise  */
+        col   = mix(vec3(0.0, 1.0, 1.0), vec3(0.294, 0.0, 0.510), f);
+        alpha = 0.94;
 
+      } else if (behind > 3.0) {
+        /* ── 3+ units BEHIND: SLOW fade violet → charcoal ────────── */
+        /* Spreads over 6 world-units so the fade is clearly gradual   */
+        float t = clamp((behind - 3.0) / 6.0, 0.0, 1.0);
+        col   = mix(vec3(0.294, 0.0, 0.510), vec3(0.102, 0.102, 0.102), t);
+        alpha = 0.92;
       }
-      /* behind > 3.28 → resting charcoal (default above) */
     }
 
     gl_FragColor = vec4(col, alpha);
@@ -150,9 +150,15 @@ const AP_TEMPLATE = Array.from({ length: SCOPE_W }, (_, px) =>
 );
 
 /* ═══════════════════════════════════════════════════════════════════
-   GlassAxon
+   Axon — phase-shift shader is the OUTER surface (always visible).
+   Previous glass-inside-sleeve approach hid the shader behind a
+   MeshPhysicalMaterial with transmission ambiguity. Now the shader
+   IS the main cylinder surface; no glass occlusion possible.
+   ─────────────────────────────────────────────────────────────────
+   CylinderGeometry local Y-axis → rotated Z by π/2 → world X-axis.
+   heightSegments=32 gives ~0.34-unit strips for smooth zone edges.
    ═══════════════════════════════════════════════════════════════════ */
-const GlassAxon = ({ wakeMatRef }) => {
+const Axon = ({ wakeMatRef }) => {
   const wakeMat = useMemo(() => new THREE.ShaderMaterial({
     vertexShader:   WAKE_VERT,
     fragmentShader: WAKE_FRAG,
@@ -171,43 +177,37 @@ const GlassAxon = ({ wakeMatRef }) => {
   }, [wakeMat, wakeMatRef]);
 
   return (
-    /* CylinderGeometry axis = local Y → rotate Z by π/2 → world X axis */
     <group rotation={[0, 0, Math.PI / 2]}>
 
-      {/* Transparent glass shell — catches rim light from SceneWrapper's gold/cyan lights */}
+      {/* ── MAIN BODY — wake shader on outer surface ──────────────── */}
       <mesh>
-        <cylinderGeometry args={[AXON_R, AXON_R, AXON_LEN, 40, 1, true]} />
-        <meshPhysicalMaterial
-          color="#1a1a1a"
-          transmission={0.88}
-          thickness={0.6}
-          roughness={0.12}
-          metalness={0.0}
-          ior={1.45}
-          transparent
-          side={THREE.DoubleSide}
-          depthWrite={false}
-        />
+        <cylinderGeometry args={[AXON_R, AXON_R, AXON_LEN, 48, 32, true]} />
+        <primitive object={wakeMat} attach="material" />
       </mesh>
 
-      {/* Structural membrane rings — faint cyan lattice */}
-      <mesh>
-        <cylinderGeometry args={[AXON_R + 0.01, AXON_R + 0.01, AXON_LEN, 20, 12, true]} />
+      {/* ── LATTICE OVERLAY — membrane structural detail ───────────── */}
+      {/* Rendered on top (slightly larger radius), responds to ZapSphere */}
+      {/* PointLight so it brightens near the Zap.                        */}
+      <mesh renderOrder={1}>
+        <cylinderGeometry args={[AXON_R + 0.02, AXON_R + 0.02, AXON_LEN, 18, 8, true]} />
         <meshStandardMaterial
           color="#00FFFF"
           emissive="#00FFFF"
-          emissiveIntensity={0.35}
-          transparent opacity={0.045}
+          emissiveIntensity={0.5}
+          transparent
+          opacity={0.055}
           wireframe
           depthWrite={false}
         />
       </mesh>
 
-      {/* Phase-shift wake sleeve — sits just inside the glass */}
-      <mesh>
-        <cylinderGeometry args={[AXON_R - 0.04, AXON_R - 0.04, AXON_LEN, 40, 1, true]} />
-        <primitive object={wakeMat} attach="material" />
-      </mesh>
+      {/* ── END CAPS — close the axon terminals visually ──────────── */}
+      {[-AXON_LEN / 2, AXON_LEN / 2].map((y) => (
+        <mesh key={y} position={[0, y, 0]}>
+          <circleGeometry args={[AXON_R, 32]} />
+          <meshStandardMaterial color="#1a1a1a" side={THREE.DoubleSide} />
+        </mesh>
+      ))}
 
     </group>
   );
@@ -435,23 +435,23 @@ const SynapticBloom = ({ bloomTriggerRef }) => {
    Top-Right → Oscilloscope (imperative canvas, zero re-renders)
    ═══════════════════════════════════════════════════════════════════ */
 
-/* Shared panel style — identical for both corners */
+/* ── Shared HUD panel style ─────────────────────────────────────── */
+/* Per spec: rgba(0,0,0,0.7) bg, 15px padding, 8px radius           */
 const OVERLAY_BOX = {
-  position:    "absolute",
-  background:  "rgba(3,13,13,0.90)",
-  border:      "1px solid rgba(0,255,255,0.18)",
-  borderRadius:"3px",
-  padding:     "6px 8px",
-  fontFamily:  '"JetBrains Mono", "Fira Code", monospace',
-  userSelect:  "none",
-  lineHeight:  1,
+  position:     "absolute",
+  background:   "rgba(0,0,0,0.70)",
+  borderRadius: "8px",
+  padding:      "15px",
+  fontFamily:   '"JetBrains Mono", "Fira Code", monospace',
+  userSelect:   "none",
 };
-const OVERLAY_HEADER = {
-  fontSize:      "6px",
-  color:         "rgba(0,255,255,0.42)",
-  letterSpacing: "0.22em",
+const OVERLAY_TITLE = {
+  fontSize:      "9px",
+  fontWeight:    700,
+  color:         "rgba(0,255,255,0.55)",
+  letterSpacing: "0.26em",
   textTransform: "uppercase",
-  marginBottom:  "5px",
+  marginBottom:  "12px",
   display:       "block",
 };
 
@@ -533,42 +533,37 @@ const SceneOverlay = ({ travelProgressRef }) => {
       <div style={{ position: "relative", width: "100%", height: "100%" }}>
 
         {/* ── TOP-LEFT: Ion Legend ───────────────────────────────── */}
-        <div style={{ ...OVERLAY_BOX, top: "12px", left: "12px" }}>
-          <span style={OVERLAY_HEADER}>Ion Legend</span>
+        <div style={{ ...OVERLAY_BOX, top: "14px", left: "14px" }}>
+          <span style={OVERLAY_TITLE}>Ion Legend</span>
 
-          {/* Na⁺ / K⁺ dot rows */}
+          {/* Three bullet rows — 16px bold per spec */}
           {[
-            { label: "Na⁺ influx", color: GOLD   },
-            { label: "K⁺ efflux",  color: K_COL  },
-          ].map(({ label, color }) => (
-            <div key={label} style={{ display: "flex", alignItems: "center", gap: "5px", marginBottom: "2px" }}>
+            { label: "Na⁺  Sodium Influx",         color: GOLD,     sub: "(inward current)" },
+            { label: "K⁺   Potassium Efflux",       color: K_COL,    sub: "(outward current)" },
+            { label: "Refractory  Hyperpolarization", color: "#9966FF", sub: "(reset period)" },
+          ].map(({ label, color, sub }) => (
+            <div key={label} style={{ display: "flex", alignItems: "flex-start", gap: "10px", marginBottom: "10px" }}>
+              {/* Colored bullet */}
               <span style={{
-                width: "6px", height: "6px", borderRadius: "50%",
-                background: color, boxShadow: `0 0 5px ${color}`,
-                display: "inline-block", flexShrink: 0,
+                width: "10px", height: "10px", borderRadius: "50%",
+                background: color, boxShadow: `0 0 7px ${color}`,
+                display: "inline-block", flexShrink: 0, marginTop: "3px",
               }} />
-              <span style={{ fontSize: "7px", color, letterSpacing: "0.10em" }}>{label}</span>
+              <div>
+                <div style={{ fontSize: "14px", fontWeight: 700, color, lineHeight: 1.2 }}>
+                  {label}
+                </div>
+                <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.35)", marginTop: "2px" }}>
+                  {sub}
+                </div>
+              </div>
             </div>
           ))}
-
-          {/* Phase colour key */}
-          <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", marginTop: "5px", paddingTop: "5px" }}>
-            {[
-              { label: "RESTING",        color: "rgba(255,255,255,0.24)" },
-              { label: "DEPOLARISATION", color: CYAN                     },
-              { label: "REFRACTORY",     color: "#9966FF"                },
-              { label: "SYNAPTIC",       color: GOLD                     },
-            ].map(({ label, color }) => (
-              <div key={label} style={{ fontSize: "5.5px", color, letterSpacing: "0.16em", lineHeight: 1.8 }}>
-                {label}
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* ── TOP-RIGHT: Oscilloscope ────────────────────────────── */}
-        <div style={{ ...OVERLAY_BOX, top: "12px", right: "12px" }}>
-          <span style={OVERLAY_HEADER}>Vm [mV] · action potential</span>
+        <div style={{ ...OVERLAY_BOX, top: "14px", right: "14px" }}>
+          <span style={OVERLAY_TITLE}>Vm [mV] · Action Potential</span>
           <canvas ref={canvasRef} width={SCOPE_W} height={SCOPE_H}
             style={{ display: "block" }} />
         </div>
@@ -655,7 +650,7 @@ const NeuronScene = ({ onUpdate }) => {
 
   return (
     <group>
-      <GlassAxon      wakeMatRef={wakeMatRef} />
+      <Axon           wakeMatRef={wakeMatRef} />
       <ZapSphere      zapXRef={zapXRef}           isActiveRef={isActiveRef} />
       <IonBurstSystem burstTriggerRef={burstTriggerRef} />
       <SynapticBloom  bloomTriggerRef={bloomTriggerRef} />
