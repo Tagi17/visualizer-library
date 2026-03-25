@@ -10,7 +10,6 @@ import NeuronScene  from "../components/visualizers/neuron/NeuronScene";
 /* ── Color palette ──────────────────────────────────────────────── */
 const CYAN    = "#00FFFF";
 const GOLD    = "#FFD700";
-const VIOLET  = "#4B0082";   // matches wake shader refractory zone exactly
 const DIM     = "rgba(255,255,255,0.22)";
 
 const PHASE_META = {
@@ -85,8 +84,8 @@ const NeuronZapPage = () => {
       const mv = voltage.toFixed(0);
       vmRef.current.textContent  = `${mv} mV`;
       vmRef.current.style.color  =
-        voltage >  10 ? CYAN   :
-        voltage < -75 ? VIOLET :
+        voltage >  10 ? CYAN              :
+        voltage < -75 ? "#8855FF"         :   // hyperpolarisation — bright purple
                         "rgba(255,255,255,0.55)";
     }
 
@@ -119,7 +118,7 @@ const NeuronZapPage = () => {
 
       <SceneWrapper
         placeholderVariant="neuron"
-        camera={{ position: [0, 2.5, 11], fov: 58 }}
+        camera={{ position: [0, 0, 11], fov: 58 }}
         aspectRatio="4/3"
         orbitProps={{ minDistance: 5, maxDistance: 22 }}
         onLive={() => setIsLive(true)}
@@ -192,24 +191,6 @@ const NeuronZapPage = () => {
                 7.0 s
               </span>
             </div>
-          </div>
-
-          {/* Legend */}
-          <div style={{
-            ...DIVIDER,
-            padding:        "9px 16px",
-            display:        "flex",
-            alignItems:     "center",
-            justifyContent: "center",
-            gap:            "14px",
-          }}>
-            <span style={{ fontSize: "8px", letterSpacing: "0.22em", color: DIM,    fontWeight: 600 }}>RESTING</span>
-            <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.16)" }}>|</span>
-            <span style={{ fontSize: "8px", letterSpacing: "0.22em", color: CYAN,   fontWeight: 600 }}>DEPOLARISATION</span>
-            <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.16)" }}>|</span>
-            <span style={{ fontSize: "8px", letterSpacing: "0.22em", color: VIOLET, fontWeight: 600 }}>REFRACTORY</span>
-            <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.16)" }}>|</span>
-            <span style={{ fontSize: "8px", letterSpacing: "0.22em", color: GOLD,   fontWeight: 600 }}>SYNAPTIC</span>
           </div>
 
         </div>

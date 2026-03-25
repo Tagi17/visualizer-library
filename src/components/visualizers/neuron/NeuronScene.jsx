@@ -355,10 +355,10 @@ const IonBurstSystem = ({ burstTriggerRef }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════════
-   SynapticBloom — 32 cyan particles, 1.5 s, full 360° burst
+   SynapticBloom — 52 cyan particles, 1.0 s, Fibonacci sphere burst
    ═══════════════════════════════════════════════════════════════════ */
-const BLOOM_COUNT = 42;
-const BLOOM_LIFE  = 1.20;
+const BLOOM_COUNT = 52;
+const BLOOM_LIFE  = 1.00;
 
 const SynapticBloom = ({ bloomTriggerRef }) => {
   const ref   = useRef();
@@ -419,6 +419,68 @@ const SynapticBloom = ({ bloomTriggerRef }) => {
     </instancedMesh>
   );
 };
+
+/* ═══════════════════════════════════════════════════════════════════
+   IonLegend — static Top-Left overlay, matches Oscilloscope style
+   ═══════════════════════════════════════════════════════════════════ */
+const LEGEND_ROWS = [
+  { label: "Na⁺ influx",      color: GOLD,                  dot: true  },
+  { label: "K⁺ efflux",       color: K_COL,                 dot: true  },
+];
+const PHASE_ROWS = [
+  { label: "RESTING",         color: "rgba(255,255,255,0.22)" },
+  { label: "DEPOLARISATION",  color: CYAN                    },
+  { label: "REFRACTORY",      color: "#8855FF"               },
+  { label: "SYNAPTIC",        color: GOLD                    },
+];
+
+const IonLegend = () => (
+  <Html position={[-5.0, 3.5, 0]} style={{ pointerEvents: "none" }}>
+    <div style={{
+      background:   "rgba(3,13,13,0.88)",
+      border:       "1px solid rgba(0,255,255,0.16)",
+      borderRadius: "3px",
+      padding:      "5px 7px",
+      fontFamily:   '"JetBrains Mono", "Fira Code", monospace',
+      userSelect:   "none",
+      minWidth:     "98px",
+    }}>
+      {/* Header */}
+      <div style={{
+        fontSize:      "6px",
+        color:         "rgba(0,255,255,0.42)",
+        letterSpacing: "0.22em",
+        textTransform: "uppercase",
+        marginBottom:  "4px",
+      }}>
+        Ion Legend
+      </div>
+
+      {/* Na+ / K+ dot rows */}
+      {LEGEND_ROWS.map(({ label, color }) => (
+        <div key={label} style={{ display: "flex", alignItems: "center", gap: "5px", marginBottom: "2px" }}>
+          <span style={{
+            width: "6px", height: "6px", borderRadius: "50%",
+            background: color, boxShadow: `0 0 4px ${color}`,
+            display: "inline-block", flexShrink: 0,
+          }} />
+          <span style={{ fontSize: "7px", color, letterSpacing: "0.10em" }}>{label}</span>
+        </div>
+      ))}
+
+      {/* Phase strip */}
+      <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", marginTop: "4px", paddingTop: "4px" }}>
+        {PHASE_ROWS.map(({ label, color }) => (
+          <div key={label} style={{
+            fontSize: "5.5px", color, letterSpacing: "0.16em", lineHeight: 1.75,
+          }}>
+            {label}
+          </div>
+        ))}
+      </div>
+    </div>
+  </Html>
+);
 
 /* ═══════════════════════════════════════════════════════════════════
    Oscilloscope — perfectly synchronized with Zap position
@@ -501,7 +563,7 @@ const Oscilloscope = ({ travelProgressRef }) => {
   });
 
   return (
-    <Html position={[4.9, 2.6, 0]} style={{ pointerEvents: "none" }}>
+    <Html position={[1.2, 3.5, 0]} style={{ pointerEvents: "none" }}>
       <div style={{
         background:   "#030d0d",
         border:       "1px solid rgba(0,255,255,0.16)",
@@ -606,6 +668,7 @@ const NeuronScene = ({ onUpdate }) => {
       <ZapSphere      zapXRef={zapXRef}           isActiveRef={isActiveRef} />
       <IonBurstSystem burstTriggerRef={burstTriggerRef} />
       <SynapticBloom  bloomTriggerRef={bloomTriggerRef} />
+      <IonLegend />
       <Oscilloscope   travelProgressRef={travelProgressRef} />
     </group>
   );
