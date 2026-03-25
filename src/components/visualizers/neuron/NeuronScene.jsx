@@ -11,10 +11,10 @@
  *   Glass shell  : MeshPhysicalMaterial  transmission 0.88, roughness 0.12
  *   Wake sleeve  : ShaderMaterial — distance-based phase zones:
  *
- *     |behind| < 0.28             → Lead    : Neon Cyan  #00FFFF   (Zap tip)
- *     0.28 < behind < 1.28        → Wake    : Cyan → dimming        (1-unit depolarisation)
- *     1.28 < behind < 3.28        → Refract : Deep Violet #4B0082   (2-unit refractory)
- *     behind > 3.28  or  ahead    → Rest    : Charcoal #1a1a1a
+ *     |behind| ≤ 0.45             → Lead    : Neon Cyan  #00FFFF   (Zap tip)
+ *     0.45 < behind ≤ 1.0         → Trans   : Cyan → Violet         (0.55-unit blend)
+ *     1.0  < behind ≤ 3.0         → Refract : Solid Deep Violet #4B0082 (2-unit refractory)
+ *     behind > 3.0                → Rest    : Violet → Charcoal #1a1a1a (5-unit fade)
  *
  *   "behind" is measured in world units (not seconds), so zones are
  *   always exactly 1 and 2 units wide regardless of Zap speed.
@@ -114,18 +114,22 @@ const WAKE_FRAG = /* glsl */`
         col   = mix(vec3(0.0, 0.85, 0.9), vec3(0.0, 1.0, 1.0) * 2.2, g * g);
         alpha = 1.0;
 
-      } else if (behind > 0.45 && behind <= 3.0) {
-        /* ── 0-3 units BEHIND: QUICK fade cyan → violet #4B0082 ── */
-        /* sqrt gives concave-up curve: hits violet fast, slows near end */
-        float t = (behind - 0.45) / 2.55;          /* 0→1 over the zone */
-        float f = sqrt(t);                           /* fast initial rise  */
-        col   = mix(vec3(0.0, 1.0, 1.0), vec3(0.294, 0.0, 0.510), f);
+      } else if (behind > 0.45 && behind <= 1.0) {
+        /* ── TRANSITION (0.55 units): Cyan → Deep Violet ─────────── */
+        float t = (behind - 0.45) / 0.55;
+        col   = mix(vec3(0.0, 1.0, 1.0), vec3(0.294, 0.0, 0.510), t * t);
+        alpha = 0.96;
+
+      } else if (behind > 1.0 && behind <= 3.0) {
+        /* ── REFRACTORY ZONE (~2 units): Solid Deep Violet #4B0082 ── */
+        /* Biologically accurate: hyperpolarized membrane is refractory */
+        /* Signal cannot re-fire here — this is why APs are unidirectional */
+        col   = vec3(0.294, 0.0, 0.510);
         alpha = 0.94;
 
       } else if (behind > 3.0) {
-        /* ── 3+ units BEHIND: SLOW fade violet → charcoal ────────── */
-        /* Spreads over 6 world-units so the fade is clearly gradual   */
-        float t = clamp((behind - 3.0) / 6.0, 0.0, 1.0);
+        /* ── RECOVERY (5 units): Violet → Charcoal ───────────────── */
+        float t = clamp((behind - 3.0) / 5.0, 0.0, 1.0);
         col   = mix(vec3(0.294, 0.0, 0.510), vec3(0.102, 0.102, 0.102), t);
         alpha = 0.92;
       }
@@ -361,7 +365,7 @@ const IonBurstSystem = ({ burstTriggerRef }) => {
    SynapticBloom — 52 cyan particles, 1.0 s, Fibonacci sphere burst
    ═══════════════════════════════════════════════════════════════════ */
 const BLOOM_COUNT = 52;
-const BLOOM_LIFE  = 1.00;
+const BLOOM_LIFE  = 1.20;   // 1.2 s — smooth expand-and-fade neurotransmitter release
 
 const SynapticBloom = ({ bloomTriggerRef }) => {
   const ref   = useRef();
