@@ -57,7 +57,8 @@ const CYAN     = "#00FFFF";
 const GOLD     = "#FFD700";
 const K_COL    = "#00AEEF";
 
-const BURST_XS = [-4.0, -2.5, -1.0, 0.5, 2.0, 3.5];
+/* Continuous ion emission — fires at the Zap's live X every N world-units */
+const BURST_INTERVAL = 1.2;
 
 const lerp  = (a, b, t) => a + (b - a) * t;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -116,9 +117,12 @@ const WAKE_FRAG = /* glsl */`
 
       } else if (behind > 1.28 && behind <= 3.28) {
         /* ── REFRACTORY: 2-unit Deep Violet #4B0082 ─────────────── */
-        float f = (behind - 1.28) / 2.0;   /* 0 at start, 1 at end  */
+        /* Cubic ease-in fade: full violet at entry, decays rapidly  */
+        /* so the zone reads as a brief flash, not a slow gradient.  */
+        float zone = (behind - 1.28) / 2.0;            /* 0→1 through zone */
+        float f    = 1.0 - pow(1.0 - zone, 3.0);       /* cubic ease-in     */
         col   = mix(vec3(0.294, 0.0, 0.510), vec3(0.102, 0.102, 0.102), f);
-        alpha = mix(0.82, 0.62, f);
+        alpha = mix(0.92, 0.62, f);
 
       }
       /* behind > 3.28 → resting charcoal (default above) */
@@ -285,7 +289,7 @@ const IonBurstSystem = ({ burstTriggerRef }) => {
         endR:     0.08 + Math.random() * 0.12,            /* inside  */
         arcMag:   0.20 + Math.random() * 0.18,            /* bows outward at peak */
         triggerX: xPos,
-        xOff:     (Math.random() - 0.5) * 0.55,
+        xOff:     (Math.random() - 0.5) * 0.28,   /* tight cluster at Zap edge */
       };
 
       /* K⁺ — fly OUTWARD (intracellular → extracellular), offset angle */
@@ -298,7 +302,7 @@ const IonBurstSystem = ({ burstTriggerRef }) => {
         endR:     AXON_R + 0.60 + Math.random() * 0.30,  /* outside */
         arcMag:   0.22 + Math.random() * 0.18,           /* bows outward at peak */
         triggerX: xPos,
-        xOff:     (Math.random() - 0.5) * 0.55,
+        xOff:     (Math.random() - 0.5) * 0.28,   /* tight cluster at Zap edge */
       };
     }
   };
@@ -353,8 +357,8 @@ const IonBurstSystem = ({ burstTriggerRef }) => {
 /* ═══════════════════════════════════════════════════════════════════
    SynapticBloom — 32 cyan particles, 1.5 s, full 360° burst
    ═══════════════════════════════════════════════════════════════════ */
-const BLOOM_COUNT = 35;
-const BLOOM_LIFE  = 1.50;
+const BLOOM_COUNT = 42;
+const BLOOM_LIFE  = 1.20;
 
 const SynapticBloom = ({ bloomTriggerRef }) => {
   const ref   = useRef();
@@ -395,7 +399,12 @@ const SynapticBloom = ({ bloomTriggerRef }) => {
         p.vy    * BLOOM_LIFE * ease,
         p.vz    * BLOOM_LIFE * ease,
       );
-      dummy.scale.setScalar((1 - pct) * 0.15);
+      /* Expand fast (0→20% of life), then fade slowly (20%→100%) */
+      const GROW = 0.20;
+      const size = pct < GROW
+        ? (pct / GROW) * 0.20
+        : ((1 - pct) / (1 - GROW)) * 0.20;
+      dummy.scale.setScalar(size);
       dummy.updateMatrix();
       ref.current.setMatrixAt(i, dummy.matrix);
     });
@@ -526,7 +535,8 @@ const NeuronScene = ({ onUpdate }) => {
   const travelProgressRef = useRef(0);       /* 0-1 during travel, 0/1 at rest/bloom */
   const burstTriggerRef   = useRef(null);
   const bloomTriggerRef   = useRef(null);
-  const burstFiredRef     = useRef(BURST_XS.map(() => false));
+  /* Continuous ion emitter — tracks last X where ions were fired    */
+  const lastBurstXRef     = useRef(ZAP_START - BURST_INTERVAL);
   const bloomFiredRef     = useRef(false);
   const lastCycleRef      = useRef(-1);
   const onUpdateRef       = useRef(onUpdate);
@@ -539,9 +549,9 @@ const NeuronScene = ({ onUpdate }) => {
 
     /* Reset per-cycle firing state */
     if (cycleId !== lastCycleRef.current) {
-      lastCycleRef.current = cycleId;
-      burstFiredRef.current.fill(false);
-      bloomFiredRef.current = false;
+      lastCycleRef.current      = cycleId;
+      lastBurstXRef.current     = ZAP_START - BURST_INTERVAL; // ready for first burst
+      bloomFiredRef.current     = false;
     }
 
     /* ── Phase ───────────────────────────────────────────────────── */
@@ -556,13 +566,11 @@ const NeuronScene = ({ onUpdate }) => {
       isActive = true;
       phase    = "travel";
 
-      /* Fire ion bursts as Zap crosses triggers */
-      BURST_XS.forEach((bx, i) => {
-        if (!burstFiredRef.current[i] && zapX >= bx) {
-          burstFiredRef.current[i] = true;
-          burstTriggerRef.current?.(bx);
-        }
-      });
+      /* Fire ion burst at Zap's live position every BURST_INTERVAL units */
+      if (zapX - lastBurstXRef.current >= BURST_INTERVAL) {
+        lastBurstXRef.current = zapX;
+        burstTriggerRef.current?.(zapX);   // ions spawn exactly at leading edge
+      }
 
     } else {
       /* bloom — Zap frozen at terminus; keep isActive so wake/refractory
