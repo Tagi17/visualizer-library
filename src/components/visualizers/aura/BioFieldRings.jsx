@@ -1,56 +1,58 @@
 /**
- * BioFieldRings — 5 rings expanding radially in the XY plane, facing the camera.
+ * BioFieldRings — 5 rings expanding strictly OUTWARD in the XY plane.
  *
- * All rings share origin (0,0,0) — position parent group at world (0, 1.2, 0).
+ * ─── THE CORE RULE ───────────────────────────────────────────────
+ * We NEVER blend two independent sawtooth values together.
+ * Blending (chaosProgress, coherentProgress) via lerp causes backward
+ * jumps: when one sawtooth wraps (1→0) while the other hasn't, the
+ * lerped value drops → ring appears to contract inward.
  *
- * Expansion uses a SAWTOOTH (linear reset) pattern — NOT a sine wave:
- *   progress = (time * speed + phase) % 1   →  0 → 1 → 0 → 1 …
- *   scale    = progress * MAX_SCALE          →  rings only ever grow outward
- *   opacity  = 1 - progress                 →  born bright, dies transparent (no snap)
+ * CORRECT APPROACH: blend `currentSpeed` and `currentPhase` as plain
+ * scalars, then compute ONE sawtooth from them:
  *
- * CHAOS (focus = 0)
- *   • Each ring has a unique chaosSpeed and chaosPhase (seeded once at module load)
- *   • Rings expand and reset asynchronously → jittery, unsynchronised
- *   • Jagged vertex geometry: animated per-vertex radial noise in the XY plane
- *   • Each ring has a unique startRot (rotation.z) for visual variety
+ *   progress = (t * currentSpeed + currentPhase) % 1   →  0…1…0…1…
+ *   scale    =  progress * MAX_SCALE                    →  always growing
+ *   opacity  = (1 − progress) * maxOpacity              →  fades at edge
  *
- * Speed mapping (controlled by slider):
- *   expansionSpeed = lerp(CHAOS_SPEED, COHERENT_SPEED, focus)
- *   focus=0 → fast, frantic   |   focus=1 → slow, majestic
+ * This is monotonically increasing for any fixed (speed, phase). ✓
  *
- * Phase convergence:
- *   phaseStagger = lerp(index / RING_COUNT, 0, focus)
- *   focus=0 → rings evenly spread   |   focus=1 → all rings perfectly synced,
- *   moving as ONE single expanding unit
+ * ─── uCoherence = 0  (CHAOS) ────────────────────────────────────
+ *   Shape:    Jagged — per-vertex noise up to JAG_MAX (0.50)
+ *   Rotation: Random ±30° tilt on X and Z axes
+ *   Speed:    Fast, each ring has its own random speed
+ *   Phase:    Random per-ring → fully desynchronised
  *
- * COHERENT (focus = 1)
- *   • All rings share expansionSpeed = COHERENT_SPEED; phaseStagger = 0 → perfect sync
- *   • Smooth circular geometry (jag → 0), rotation.z → 0
- *   • Gold #FFD700, toneMapped=false for HDR glow
+ * ─── uCoherence = 1  (COHERENT) ─────────────────────────────────
+ *   Shape:    Perfect circles — noise = 0
+ *   Rotation: Flat — rotation.x = rotation.z = 0
+ *   Speed:    Slow (COHERENT_SPEED) — deep breath rhythm
+ *   Phase:    Evenly spaced (0, 0.2, 0.4, 0.6, 0.8) — all 5 rings
+ *             always visible at different radii, never stops spawning
  */
 import React, { useRef, useMemo, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE   from "three";
 
-const GOLD           = "#FFD700";
 const SEGMENTS       = 80;
-const JAG_MAX        = 0.32;
-const MAX_SCALE      = 8.0;   // rings grow from 0 → this scale then reset
-const CHAOS_SPEED    = 1.20;  // fast, frantic expansion speed at focus = 0
-const COHERENT_SPEED = 0.20;  // slow, majestic expansion speed at focus = 1
+const JAG_MAX        = 0.50;
+const MAX_SCALE      = 8.0;
+const CHAOS_SPEED    = 1.20;
+const COHERENT_SPEED = 0.18;
 const RING_COUNT     = 5;
 
 const CHAOS_COLORS = ["#FF4444", "#FF8800", "#BBFF00", "#8844FF", "#00FFCC"];
+const GOLD         = "#FFD700";
 
-/* Per-ring chaos config — seeded once at module load, stable for session */
-const CONFIGS = Array.from({ length: 5 }, (_, i) => ({
-  chaosSpeed : 0.30 + Math.random() * 0.50,   // 0.30 – 0.80 cycles/s
-  chaosPhase : Math.random(),                   // 0 – 1 start offset
-  startRot   : Math.random() * Math.PI * 2,    // unique rotation.z for chaos
+/* Per-ring chaos config — seeded once at module load */
+const CONFIGS = Array.from({ length: RING_COUNT }, (_, i) => ({
+  chaosSpeed : 0.30 + Math.random() * 0.50,            // 0.30–0.80 cycles/s
+  chaosPhase : Math.random(),                            // 0–1 random start
+  startRotZ  : (Math.random() - 0.5) * (Math.PI / 3),  // ±30° Z
+  startRotX  : (Math.random() - 0.5) * (Math.PI / 3),  // ±30° X
   color      : CHAOS_COLORS[i],
 }));
 
-/* Per-ring, per-vertex jag data — seeded once */
+/* Per-ring, per-vertex jag seed — static */
 const RING_JAGS = CONFIGS.map(() => ({
   offsets: Float32Array.from({ length: SEGMENTS }, () => (Math.random() - 0.5) * 2),
   freqs  : Float32Array.from({ length: SEGMENTS }, () => 1.5 + Math.random() * 4.0),
@@ -64,12 +66,11 @@ const _cOut = new THREE.Color();
 
 /* ─────────────────────────────────────────────────────────────── */
 
-const BioFieldRing = ({ index, focus }) => {
+const BioFieldRing = ({ index, uCoherence }) => {
   const lineRef = useRef();
   const cfg  = CONFIGS[index];
   const jags = RING_JAGS[index];
 
-  /* XY-plane geometry — z=0 for all vertices so the ring faces the camera */
   const geo = useMemo(() => {
     const g   = new THREE.BufferGeometry();
     const pos = new Float32Array(SEGMENTS * 3);
@@ -86,55 +87,48 @@ const BioFieldRing = ({ index, focus }) => {
     if (!lineRef.current) return;
     const t = clock.elapsedTime;
 
-    /* ── Dynamic speed: slider maps fast chaos → slow coherent ──── */
-    const expansionSpeed = lerp(CHAOS_SPEED, COHERENT_SPEED, focus);
+    /* ── Blend speed + phase as scalars (NOT sawtooth values) ────── */
+    /* This is the only correct way to interpolate two sawteeth.     */
+    const effectiveChaosSpeed = cfg.chaosSpeed * lerp(1.8, 1.0, uCoherence);
+    const currentSpeed = lerp(effectiveChaosSpeed, COHERENT_SPEED, uCoherence);
 
-    /* ── SAWTOOTH: (time * speed) % 1 — only ever grows outward ── */
+    /* Coherent phase: evenly spread so all 5 rings are always active */
+    const currentPhase = lerp(cfg.chaosPhase, index / RING_COUNT, uCoherence);
 
-    /* CHAOS: unique per-ring speed, amplified at low focus for extra frenzy */
-    const effectiveChaosSpeed = cfg.chaosSpeed * lerp(1.8, 1.0, focus);
-    const chaosProgress       = (t * effectiveChaosSpeed + cfg.chaosPhase) % 1;
+    /* ── ONE sawtooth — strictly outward, never contracts ─────────── */
+    const progress = (t * currentSpeed + currentPhase) % 1;
 
-    /* COHERENT: shared expansionSpeed; phase stagger converges to 0 at focus=1
-       so all rings reach exactly the same position → one expanding unit        */
-    const phaseStagger     = lerp(index / RING_COUNT, 0, focus);
-    const coherentProgress = (t * expansionSpeed + phaseStagger) % 1;
-
-    /* Blend between the two sawtooth values */
-    const progress = lerp(chaosProgress, coherentProgress, focus);
-
-    /* ── Scale: LINEAR outward only — X and Y, never Z ─────────── */
+    /* ── Scale: linear outward on X/Y only ──────────────────────── */
     const s = progress * MAX_SCALE;
     lineRef.current.scale.set(s, s, 1);
 
-    /* ── Opacity: born bright (1.0) → dies transparent (0.0) ───── */
-    /* Coherent rings are slightly more opaque for the glow effect   */
-    const maxOpacity = lerp(0.60, 0.88, focus);
+    /* ── Opacity: 1.0 at origin → 0.0 at maxRadius ──────────────── */
+    const maxOpacity = lerp(0.65, 0.92, uCoherence);
     lineRef.current.material.opacity = (1 - progress) * maxOpacity;
 
-    /* ── Jag amplitude → 0 as coherence rises ──────────────────── */
-    const jagAmp = (1 - focus) * JAG_MAX;
-
-    /* ── Write XY-plane vertices (z = 0, always parallel to screen) */
-    const pos = geo.attributes.position.array;
+    /* ── Geometry: vertex noise smooths to 0 as coherence rises ──── */
+    /* NOTE: Math.sin() here drives vertex shape only — NOT scale.   */
+    const jagAmp = (1 - uCoherence) * JAG_MAX;
+    const pos    = geo.attributes.position.array;
     for (let i = 0; i < SEGMENTS; i++) {
       const angle = (i / SEGMENTS) * Math.PI * 2;
       const jag   = jagAmp * jags.offsets[i] * Math.sin(t * jags.freqs[i] + jags.phases[i]);
       const r     = 1.0 + jag;
-      pos[i * 3    ] = Math.cos(angle) * r;   // X
-      pos[i * 3 + 1] = Math.sin(angle) * r;   // Y
-      pos[i * 3 + 2] = 0;                      // Z = 0
+      pos[i * 3    ] = Math.cos(angle) * r;
+      pos[i * 3 + 1] = Math.sin(angle) * r;
+      pos[i * 3 + 2] = 0;
     }
     geo.attributes.position.needsUpdate = true;
 
-    /* ── Rotation: chaos has unique z-rotation, coherent aligns ── */
-    lineRef.current.rotation.z = lerp(cfg.startRot, 0, focus);
+    /* ── Rotation: ±30° chaos tilts → flat horizontal at coherence ─ */
+    lineRef.current.rotation.x = lerp(cfg.startRotX, 0, uCoherence);
+    lineRef.current.rotation.z = lerp(cfg.startRotZ, 0, uCoherence);
 
-    /* ── Colour: chaos hue → gold with HDR glow past 50% ────────── */
+    /* ── Colour: chaos hue → gold HDR glow at coherence ─────────── */
     _cA.set(cfg.color);
-    _cOut.lerpColors(_cA, _cB, focus);
-    if (focus > 0.5) {
-      const glow = lerp(1.0, 2.4, (focus - 0.5) * 2);
+    _cOut.lerpColors(_cA, _cB, uCoherence);
+    if (uCoherence > 0.5) {
+      const glow = lerp(1.0, 2.4, (uCoherence - 0.5) * 2);
       lineRef.current.material.color.setRGB(
         _cOut.r * glow, _cOut.g * glow, _cOut.b * glow,
       );
@@ -158,10 +152,10 @@ const BioFieldRing = ({ index, focus }) => {
 
 /* ─────────────────────────────────────────────────────────────── */
 
-const BioFieldRings = ({ focus }) => (
+const BioFieldRings = ({ uCoherence }) => (
   <group>
     {CONFIGS.map((_, i) => (
-      <BioFieldRing key={i} index={i} focus={focus} />
+      <BioFieldRing key={i} index={i} uCoherence={uCoherence} />
     ))}
   </group>
 );

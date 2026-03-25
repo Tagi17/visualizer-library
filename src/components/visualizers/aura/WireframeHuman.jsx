@@ -1,168 +1,128 @@
 /**
- * WireframeHuman — tries to load /public/models/human_silhouette.glb.
+ * WireframeHuman — loads /public/lowpoly_male_base_mesh.glb.
  *
- * ► When the GLB exists: renders the loaded model with neon-cyan wireframe material.
- * ► When the GLB is missing (404) or still loading: renders the procedural figure below.
+ * Aesthetic: PERIMETER EDGES ONLY — no internal mesh grid.
+ *   ▸ All mesh faces are discarded.
+ *   ▸ THREE.EdgesGeometry extracts only the structural polygon edges
+ *     (faces whose normals differ by ≥ EDGE_THRESHOLD degrees).
+ *   ▸ Rendered as LineSegments with neon cyan LineBasicMaterial.
  *
- * Graceful degradation works via two layers:
- *   1. <Suspense fallback={<ProceduralHuman />}> — shows procedural while model fetches
- *   2. <GLTFBoundary>                            — shows procedural if the fetch fails (404 etc.)
- *
- * To activate the GLTF path, drop your file at:
- *   /public/models/human_silhouette.glb
- *   Scale hint: if the model is "1 unit = 1 metre" adjust scale={[5,5,5]} below.
+ * Scale: auto-fits to TARGET_HEIGHT units (1.75× prior 9-unit target).
+ * Ground: feet sit at y=0 within this component's local space.
+ *         Parent group in the page shifts the figure to the viewport bottom.
+ * Static: zero animation, never moves.
  */
-import React, { useMemo, Component, Suspense } from "react";
+import React, { useMemo, useEffect, Component, Suspense } from "react";
 import { useGLTF } from "@react-three/drei";
 import * as THREE  from "three";
 
-/* ── Shared constants ──────────────────────────────────────────── */
-const MODEL_PATH = "/models/human_silhouette.glb";
-const CYAN       = "#00FFFF";
-const W = {
-  color: CYAN, emissive: CYAN, emissiveIntensity: 0.65,
-  wireframe: true, transparent: true, opacity: 0.78,
-};
-const WIRE_MAT = new THREE.MeshStandardMaterial({
-  color:             new THREE.Color(CYAN),
-  emissive:          new THREE.Color(CYAN),
-  emissiveIntensity: 0.65,
-  wireframe:         true,
-  transparent:       true,
-  opacity:           0.78,
-  depthWrite:        false,
+const MODEL_PATH      = "/lowpoly_male_base_mesh.glb";
+const TARGET_HEIGHT   = 12.15;   // 1.35 × 9.0
+const EDGE_THRESHOLD  = 15;      // degrees — shows polygon edges, hides fine triangulation
+const CYAN            = "#00FFFF";
+
+/* Shared perimeter edge material */
+const EDGE_MAT = new THREE.LineBasicMaterial({
+  color:       new THREE.Color(CYAN),
+  transparent: true,
+  opacity:     0.6,
+  toneMapped:  false,
 });
+
+/* ── Build a flat group of LineSegments from GLB scene ─────────── */
+const buildEdgeGroup = (scene) => {
+  /* Clone so the cached asset is never mutated */
+  const clone = scene.clone(true);
+
+  /* Scale to TARGET_HEIGHT */
+  const box    = new THREE.Box3().setFromObject(clone);
+  const height = Math.max(box.max.y - box.min.y, 0.001);
+  clone.scale.setScalar(TARGET_HEIGHT / height);
+
+  /* Shift so feet land at y = 0 */
+  box.setFromObject(clone);
+  clone.position.y -= box.min.y;
+
+  /* Bake all transforms so matrixWorld is correct */
+  clone.updateMatrixWorld(true);
+
+  /* Collect meshes (traversal safe — we read only, don't mutate the clone) */
+  const meshes = [];
+  clone.traverse((c) => { if (c.isMesh) meshes.push(c); });
+
+  /* Build a flat root group — no nested transforms */
+  const root = new THREE.Group();
+  meshes.forEach((mesh) => {
+    /* Bake the world matrix into a geometry copy (world-space vertices) */
+    const worldGeo = mesh.geometry.clone();
+    worldGeo.applyMatrix4(mesh.matrixWorld);
+
+    /* EdgesGeometry: only edges whose adjacent face normals differ by > EDGE_THRESHOLD° */
+    const edgeGeo = new THREE.EdgesGeometry(worldGeo, EDGE_THRESHOLD);
+    root.add(new THREE.LineSegments(edgeGeo, EDGE_MAT));
+
+    worldGeo.dispose(); // temp clone no longer needed
+  });
+
+  return root;
+};
 
 /* ── GLTF loader (suspends while fetching) ─────────────────────── */
 const GLTFHuman = () => {
   const { scene } = useGLTF(MODEL_PATH);
-  const model = useMemo(() => {
-    const clone = scene.clone(true);
-    clone.traverse((child) => {
-      if (child.isMesh) {
-        child.material      = WIRE_MAT;
-        child.castShadow    = false;
-        child.receiveShadow = false;
-      }
-    });
-    return clone;
-  }, [scene]);
-  return (
-    <primitive object={model} position={[0, -1.5, 0]} scale={[5, 5, 5]} />
-  );
+  const root = useMemo(() => buildEdgeGroup(scene), [scene]);
+
+  /* Dispose edge geometries on unmount */
+  useEffect(() => () => {
+    root.traverse((c) => { if (c.isLineSegments) c.geometry.dispose(); });
+  }, [root]);
+
+  return <primitive object={root} />;
 };
 useGLTF.preload(MODEL_PATH);
 
-/* ── Procedural fallback figure ────────────────────────────────── */
-/* Arm X is constant so arms hang perfectly straight */
-const AX = 1.28;
+/* ── Procedural fallback (edge-only, matches aesthetic) ─────────── */
+const ProceduralHuman = () => {
+  /* Build edge lines from simple primitive meshes */
+  const root = useMemo(() => {
+    const g     = new THREE.Group();
+    const mat   = EDGE_MAT;
+    const scale = TARGET_HEIGHT / 9.0; // match proportions
 
-const ProceduralHuman = () => (
-  <group position={[0, -1.5, 0]}>
+    const addEdges = (geometry, position, rotation = [0, 0, 0]) => {
+      const edgeGeo = new THREE.EdgesGeometry(geometry, EDGE_THRESHOLD);
+      const line    = new THREE.LineSegments(edgeGeo, mat);
+      line.position.set(...position.map(v => v * scale));
+      line.rotation.set(...rotation);
+      g.add(line);
+    };
 
-    {/* Head */}
-    <mesh position={[0, 9.02, 0]}>
-      <sphereGeometry args={[0.60, 14, 10]} />
-      <meshStandardMaterial {...W} />
-    </mesh>
+    addEdges(new THREE.SphereGeometry(0.60 * scale, 8, 6),         [0, 9.02, 0]);
+    addEdges(new THREE.CylinderGeometry(0.23 * scale, 0.29 * scale, 0.72 * scale, 8), [0, 8.36, 0]);
+    addEdges(new THREE.CylinderGeometry(0.70 * scale, 0.78 * scale, 0.96 * scale, 8), [0, 7.28, 0]);
+    addEdges(new THREE.CylinderGeometry(0.62 * scale, 0.70 * scale, 0.88 * scale, 8), [0, 6.48, 0]);
+    addEdges(new THREE.CylinderGeometry(0.56 * scale, 0.62 * scale, 0.68 * scale, 8), [0, 5.88, 0]);
+    addEdges(new THREE.CylinderGeometry(0.67 * scale, 0.60 * scale, 0.80 * scale, 8), [0, 5.22, 0]);
+    [[-1.28], [1.28]].forEach(([x]) => {
+      addEdges(new THREE.CapsuleGeometry(0.19 * scale, 1.60 * scale, 4, 8), [x, 6.82, 0]);
+      addEdges(new THREE.CapsuleGeometry(0.15 * scale, 1.60 * scale, 4, 8), [x, 5.28, 0]);
+    });
+    [[-0.43], [0.43]].forEach(([x]) => {
+      addEdges(new THREE.CapsuleGeometry(0.29 * scale, 2.05 * scale, 4, 8), [x, 3.88, 0]);
+      addEdges(new THREE.CapsuleGeometry(0.20 * scale, 2.00 * scale, 4, 8), [x, 1.68, 0]);
+    });
 
-    {/* Neck */}
-    <mesh position={[0, 8.36, 0]}>
-      <cylinderGeometry args={[0.23, 0.29, 0.72, 10]} />
-      <meshStandardMaterial {...W} />
-    </mesh>
+    return g;
+  }, []);
 
-    {/* Shoulder slopes — angled capsules bridging neck to deltoid */}
-    <mesh position={[-0.74, 7.82, 0]} rotation={[0, 0,  1.06]}>
-      <capsuleGeometry args={[0.17, 0.88, 6, 9]} />
-      <meshStandardMaterial {...W} />
-    </mesh>
-    <mesh position={[ 0.74, 7.82, 0]} rotation={[0, 0, -1.06]}>
-      <capsuleGeometry args={[0.17, 0.88, 6, 9]} />
-      <meshStandardMaterial {...W} />
-    </mesh>
+  useEffect(() => () => {
+    root.traverse((c) => { if (c.isLineSegments) c.geometry.dispose(); });
+  }, [root]);
 
-    {/* Chest — wide at top, tapers toward waist */}
-    <mesh position={[0, 7.28, 0]}>
-      <cylinderGeometry args={[0.70, 0.78, 0.96, 12]} />
-      <meshStandardMaterial {...W} />
-    </mesh>
-    <mesh position={[0, 6.48, 0]}>
-      <cylinderGeometry args={[0.62, 0.70, 0.88, 12]} />
-      <meshStandardMaterial {...W} />
-    </mesh>
+  return <primitive object={root} />;
+};
 
-    {/* Waist */}
-    <mesh position={[0, 5.88, 0]}>
-      <cylinderGeometry args={[0.56, 0.62, 0.68, 12]} />
-      <meshStandardMaterial {...W} />
-    </mesh>
-
-    {/* Hips */}
-    <mesh position={[0, 5.22, 0]}>
-      <cylinderGeometry args={[0.67, 0.60, 0.80, 12]} />
-      <meshStandardMaterial {...W} />
-    </mesh>
-
-    {/* Upper arms — straight down at constant x */}
-    {[[-AX], [AX]].map(([px], i) => (
-      <mesh key={`ua${i}`} position={[px, 6.82, 0]}>
-        <capsuleGeometry args={[0.19, 1.60, 6, 10]} />
-        <meshStandardMaterial {...W} />
-      </mesh>
-    ))}
-
-    {/* Lower arms */}
-    {[[-AX], [AX]].map(([px], i) => (
-      <mesh key={`la${i}`} position={[px, 5.28, 0]}>
-        <capsuleGeometry args={[0.15, 1.60, 6, 10]} />
-        <meshStandardMaterial {...W} />
-      </mesh>
-    ))}
-
-    {/* Hands */}
-    {[[-AX], [AX]].map(([px], i) => (
-      <mesh key={`hd${i}`} position={[px, 4.25, 0]}>
-        <capsuleGeometry args={[0.18, 0.34, 6, 8]} />
-        <meshStandardMaterial {...W} />
-      </mesh>
-    ))}
-
-    {/* Upper legs */}
-    {[[-0.43], [0.43]].map(([px], i) => (
-      <mesh key={`ul${i}`} position={[px, 3.88, 0]}>
-        <capsuleGeometry args={[0.29, 2.05, 8, 10]} />
-        <meshStandardMaterial {...W} />
-      </mesh>
-    ))}
-
-    {/* Lower legs */}
-    {[[-0.43], [0.43]].map(([px], i) => (
-      <mesh key={`ll${i}`} position={[px, 1.68, 0]}>
-        <capsuleGeometry args={[0.20, 2.00, 8, 10]} />
-        <meshStandardMaterial {...W} />
-      </mesh>
-    ))}
-
-    {/* Ankles */}
-    {[[-0.43], [0.43]].map(([px], i) => (
-      <mesh key={`an${i}`} position={[px, 0.60, 0]}>
-        <cylinderGeometry args={[0.13, 0.17, 0.52, 8]} />
-        <meshStandardMaterial {...W} />
-      </mesh>
-    ))}
-
-    {/* Feet — toes turned slightly outward */}
-    {[[-0.43, -0.18], [0.43, 0.18]].map(([px, ry], i) => (
-      <mesh key={`ft${i}`} position={[px, 0.18, 0.18]} rotation={[0, ry, 0]}>
-        <boxGeometry args={[0.36, 0.26, 0.84]} />
-        <meshStandardMaterial {...W} />
-      </mesh>
-    ))}
-  </group>
-);
-
-/* ── Error boundary: catches GLTF load failure ─────────────────── */
+/* ── Error boundary ─────────────────────────────────────────────── */
 class GLTFBoundary extends Component {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
